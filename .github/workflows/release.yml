@@ -278,10 +278,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
+          MAC_INSTALLER="$(find installers/macos -type f -name '*.dmg' -print -quit)"
+          WINDOWS_INSTALLER="$(find installers/windows -type f -name '*Setup.exe' -print -quit)"
+          LINUX_INSTALLER="$(find installers/linux -type f -name '*.deb' -print -quit)"
+          test -s "$MAC_INSTALLER"
+          test -s "$WINDOWS_INSTALLER"
+          test -s "$LINUX_INSTALLER"
           gh release create "$RELEASE_TAG" \
-            "installers/macos/Leo Sensei の-nonsense 日本語 for dayday-chan.dmg" \
-            "installers/windows/Leo Sensei の-nonsense 日本語 for e-san Setup.exe" \
-            "installers/linux/Leo Sensei の-nonsense 日本語 for henry-chan.deb" \
+            "$MAC_INSTALLER" \
+            "$WINDOWS_INSTALLER" \
+            "$LINUX_INSTALLER" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --draft \
