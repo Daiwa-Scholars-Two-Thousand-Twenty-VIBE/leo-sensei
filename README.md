@@ -147,6 +147,8 @@ Explicit `--catalog-out` and `--events-out` paths are available for a one-time l
 
 The application source is available under the [GNU General Public License v3.0 or later](LICENSE). You may use, change, share, or sell it. If you distribute a changed version, you must also make its corresponding source available under the same license.
 
+Versions through `v1.0.2` were released under the ISC License. That permission remains valid for those versions; current development and future releases use GPL-3.0-or-later.
+
 The bundled N5-N1 vocabulary lists are unofficial JLPT approximations derived from `open-anki-jlpt-decks`, pinned at commit `1ad66734417aca9dbcca6b2d5ee440cb13ab3ba0`. The JLPT does not publish official vocabulary lists. The source deck project is distributed under the MIT License, Copyright (c) 2020 Jamie Sinclair.
 
 The product may use material from the JMdict and KANJIDIC2 dictionary files. Copyright is held by the Electronic Dictionary Research and Development Group and contributors, and the dictionary material is used under CC BY-SA 4.0.
