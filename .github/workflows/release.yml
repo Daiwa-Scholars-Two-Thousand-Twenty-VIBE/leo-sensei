@@ -143,11 +143,11 @@ jobs:
         run: |
           DMG="$(find out/make -name '*.dmg' -print -quit)"
           test -s "$DMG"
-          mv "$DMG" "out/make/Leo Sensei の-nonsense 日本語 for dayday-chan.dmg"
+          mv "$DMG" "out/make/Leo-Sensei-for-dayday-chan.dmg"
       - uses: actions/upload-artifact@v7
         with:
           name: leo-sensei-macos-universal-dmg
-          path: "out/make/Leo Sensei の-nonsense 日本語 for dayday-chan.dmg"
+          path: "out/make/Leo-Sensei-for-dayday-chan.dmg"
           if-no-files-found: error
 
   windows-installer:
@@ -208,11 +208,11 @@ jobs:
         run: |
           $setup = Get-ChildItem out/make -Recurse -Filter "*Setup.exe" | Select-Object -First 1
           if ($null -eq $setup) { throw "Squirrel Setup executable was not found" }
-          Move-Item $setup.FullName (Join-Path $setup.Directory.FullName "Leo Sensei の-nonsense 日本語 for e-san Setup.exe")
+          Move-Item $setup.FullName (Join-Path $setup.Directory.FullName "Leo-Sensei-for-e-san-Setup.exe")
       - uses: actions/upload-artifact@v7
         with:
           name: leo-sensei-windows-x64-setup
-          path: "out/make/**/Leo Sensei の-nonsense 日本語 for e-san Setup.exe"
+          path: "out/make/**/Leo-Sensei-for-e-san-Setup.exe"
           if-no-files-found: error
 
   linux-installer:
@@ -248,11 +248,11 @@ jobs:
           test -s "$DEB"
           test "$(dpkg-deb -f "$DEB" Package)" = "leo-sensei-no-nonsense-nihongo"
           dpkg-deb --fsys-tarfile "$DEB" | tar -xOf - ./usr/share/applications/leo-sensei-no-nonsense-nihongo.desktop | grep -Fx 'Name=Leo Sensei の-nonsense 日本語'
-          mv "$DEB" "out/make/Leo Sensei の-nonsense 日本語 for henry-chan.deb"
+          mv "$DEB" "out/make/Leo-Sensei-for-henry-chan.deb"
       - uses: actions/upload-artifact@v7
         with:
           name: leo-sensei-linux-x64-deb
-          path: "out/make/Leo Sensei の-nonsense 日本語 for henry-chan.deb"
+          path: "out/make/Leo-Sensei-for-henry-chan.deb"
           if-no-files-found: error
 
   draft-release:
@@ -285,9 +285,9 @@ jobs:
           test -s "$WINDOWS_INSTALLER"
           test -s "$LINUX_INSTALLER"
           gh release create "$RELEASE_TAG" \
-            "$MAC_INSTALLER" \
-            "$WINDOWS_INSTALLER" \
-            "$LINUX_INSTALLER" \
+            "$MAC_INSTALLER#Leo Sensei の-nonsense 日本語 for dayday-chan (Mac)" \
+            "$WINDOWS_INSTALLER#Leo Sensei の-nonsense 日本語 for e-san (Windows)" \
+            "$LINUX_INSTALLER#Leo Sensei の-nonsense 日本語 for henry-chan (Linux)" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --draft \

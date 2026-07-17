@@ -10,15 +10,15 @@ You can also ask Leo Sensei to keep selected browsers or other applications out 
 
 Open the repository's **Releases** page and download the file that matches your computer. The current friend-build filenames are:
 
-- Mac, including both Apple Silicon and Intel: `Leo Sensei の-nonsense 日本語 for dayday-chan.dmg`
-- Windows 10 or 11 on a 64-bit PC: `Leo Sensei の-nonsense 日本語 for e-san Setup.exe`
-- 64-bit Debian or Ubuntu Linux: `Leo Sensei の-nonsense 日本語 for henry-chan.deb`
+- Mac, including both Apple Silicon and Intel: `Leo-Sensei-for-dayday-chan.dmg`
+- Windows 10 or 11 on a 64-bit PC: `Leo-Sensei-for-e-san-Setup.exe`
+- 64-bit Debian or Ubuntu Linux: `Leo-Sensei-for-henry-chan.deb`
 
 The names after `for` are only download labels for the first testers. They are not different editions of the app. All three use the same learner-data and backup format.
 
 ## Install on a Mac
 
-1. Download `Leo Sensei の-nonsense 日本語 for dayday-chan.dmg` from the Releases page.
+1. Download `Leo-Sensei-for-dayday-chan.dmg` from the Releases page.
 2. Open the downloaded `.dmg` file.
 3. Drag Leo Sensei into the Applications folder if the disk image asks you to do so.
 4. Open Leo Sensei from Applications.
@@ -29,7 +29,7 @@ Only override this warning when you downloaded the file from the expected GitHub
 
 ## Install on Windows
 
-1. Download `Leo Sensei の-nonsense 日本語 for e-san Setup.exe` from the Releases page.
+1. Download `Leo-Sensei-for-e-san-Setup.exe` from the Releases page.
 2. Double-click the downloaded Setup file.
 3. Follow the installer, then open Leo Sensei from the Start menu.
 
@@ -40,7 +40,7 @@ Friend-test builds may be unsigned. If Microsoft Defender SmartScreen shows a wa
 The Linux download is a 64-bit Debian package. You can open the `.deb` file with your desktop's software installer, or install it from a terminal in the download directory:
 
 ```sh
-sudo apt install './Leo Sensei の-nonsense 日本語 for henry-chan.deb'
+sudo apt install './Leo-Sensei-for-henry-chan.deb'
 ```
 
 After installation, open Leo Sensei from the desktop application menu.

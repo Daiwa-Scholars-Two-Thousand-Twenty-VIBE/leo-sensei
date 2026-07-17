@@ -102,9 +102,9 @@ test("release workflow scans Linux and labels only the downloadable installer fi
   assert.match(workflow, /linux-installer:[\s\S]*runs-on: ubuntu-24\.04/u);
   assert.match(workflow, /release:scan -- --platform=linux/u);
   assert.match(workflow, /leo-sensei-linux-x64-deb/u);
-  assert.match(workflow, /Leo Sensei の-nonsense 日本語 for dayday-chan\.dmg/u);
-  assert.match(workflow, /Leo Sensei の-nonsense 日本語 for e-san Setup\.exe/u);
-  assert.match(workflow, /Leo Sensei の-nonsense 日本語 for henry-chan\.deb/u);
+  assert.match(workflow, /Leo-Sensei-for-dayday-chan\.dmg/u);
+  assert.match(workflow, /Leo-Sensei-for-e-san-Setup\.exe/u);
+  assert.match(workflow, /Leo-Sensei-for-henry-chan\.deb/u);
   assert.match(workflow, /needs: \[mac-installer, windows-installer, linux-installer\]/u);
   assert.match(workflow, /Require manual history-sanitation confirmation/u);
   assert.match(workflow, /test "\$\{\{ inputs\.history_sanitized \}\}" = "true"/u);
@@ -118,7 +118,7 @@ test("release workflow builds friend installers unsigned by default and signs on
   assert.match(workflow, /test -s "\$APP\/Contents\/Resources\/\$ICON_NAME"/u);
   assert.doesNotMatch(workflow, /file "\$APP\/Contents\/Resources\/\$ICON_NAME" \| grep/u);
   assert.match(workflow, /find installers\/windows -type f -name '\*Setup\.exe'/u);
-  assert.match(workflow, /gh release create "\$RELEASE_TAG" \\\n\s+"\$MAC_INSTALLER" \\\n\s+"\$WINDOWS_INSTALLER" \\\n\s+"\$LINUX_INSTALLER"/u);
+  assert.match(workflow, /gh release create "\$RELEASE_TAG" \\\n\s+"\$MAC_INSTALLER#Leo Sensei の-nonsense 日本語 for dayday-chan \(Mac\)" \\\n\s+"\$WINDOWS_INSTALLER#Leo Sensei の-nonsense 日本語 for e-san \(Windows\)" \\\n\s+"\$LINUX_INSTALLER#Leo Sensei の-nonsense 日本語 for henry-chan \(Linux\)"/u);
   assert.match(workflow, /sign_installers:\n\s+description: [^\n]+\n\s+required: true\n\s+default: false\n\s+type: boolean/u);
   [
     "Require Apple signing secrets",
