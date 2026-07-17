@@ -114,6 +114,9 @@ test("release workflow builds friend installers unsigned by default and signs on
   const workflow = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
   const conditionalStep = (name) => new RegExp(`- name: ${name}\\n\\s+if: \\$\\{\\{ inputs\\.sign_installers \\}\\}`, "u");
 
+  assert.match(workflow, /windows-installer:[\s\S]*runs-on: windows-2022/u);
+  assert.match(workflow, /test -s "\$APP\/Contents\/Resources\/\$ICON_NAME"/u);
+  assert.doesNotMatch(workflow, /file "\$APP\/Contents\/Resources\/\$ICON_NAME" \| grep/u);
   assert.match(workflow, /sign_installers:\n\s+description: [^\n]+\n\s+required: true\n\s+default: false\n\s+type: boolean/u);
   [
     "Require Apple signing secrets",

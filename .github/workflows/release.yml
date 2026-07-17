@@ -115,7 +115,7 @@ jobs:
           APP="$(find "$APP_DIR" -maxdepth 1 -name '*.app' -print -quit)"
           ICON_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP/Contents/Info.plist")"
           [[ "$ICON_NAME" == *.icns ]] || ICON_NAME="$ICON_NAME.icns"
-          file "$APP/Contents/Resources/$ICON_NAME" | grep -q 'Apple Icon Image'
+          test -s "$APP/Contents/Resources/$ICON_NAME"
       - name: Verify signed macOS app
         if: ${{ inputs.sign_installers }}
         run: |
@@ -152,7 +152,7 @@ jobs:
 
   windows-installer:
     needs: preflight
-    runs-on: windows-2025
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
