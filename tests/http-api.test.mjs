@@ -521,7 +521,7 @@ test("HTTP daily status prewarms queued pronunciations without exposing readings
           stream: false,
         });
         server.close(() => {
-          rmSync(files.directory, { recursive: true, force: true });
+          rmSync(files.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
           done();
         });
       });
