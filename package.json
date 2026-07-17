@@ -1,0 +1,48 @@
+{
+  "name": "leo-sensei-no-nonsense-nihongo",
+  "productName": "Leo Sensei の-nonsense 日本語",
+  "version": "1.0.0",
+  "description": "Offline-first Japanese study and review for macOS, Windows, and Linux.",
+  "main": "desktop/main.mjs",
+  "bin": {
+    "language-learning": "scripts/language-learning.mjs"
+  },
+  "scripts": {
+    "export:marumori:public": "node scripts/marumori-export.mjs",
+    "migrate:marumori": "node scripts/migrate-marumori.mjs",
+    "normalize:marumori": "node scripts/marumori-normalize.mjs",
+    "review": "node scripts/review-cli.mjs",
+    "status": "node scripts/language-learning.mjs status --json",
+    "serve": "node scripts/review-server.mjs",
+    "summarize:marumori": "node scripts/marumori-summarize.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node release/check-syntax.mjs",
+    "release:scan": "node release/scan.mjs",
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "make:mac": "electron-forge make --platform=darwin --arch=universal",
+    "make:linux": "electron-forge make --platform=linux --arch=x64",
+    "make:windows": "electron-forge make --platform=win32 --arch=x64"
+  },
+  "keywords": [],
+  "author": "Daiwa Vibe Tribe",
+  "license": "ISC",
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1",
+    "get-windows": "^9.3.0",
+    "ts-fsrs": "^5.4.1",
+    "wanakana": "^5.3.1"
+  },
+  "overrides": {
+    "tar": "7.5.20"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.2",
+    "@electron-forge/maker-deb": "^7.11.2",
+    "@electron-forge/maker-dmg": "^7.11.2",
+    "@electron-forge/maker-squirrel": "^7.11.2",
+    "@electron/asar": "^3.4.1",
+    "electron": "^43.1.1"
+  }
+}

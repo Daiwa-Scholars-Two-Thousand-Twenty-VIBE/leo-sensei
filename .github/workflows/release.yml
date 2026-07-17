@@ -1,0 +1,289 @@
+name: Build release installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      history_sanitized:
+        description: I verified every reachable Git ref is safe for public publication
+        required: true
+        default: false
+        type: boolean
+      sign_installers:
+        description: Sign and notarize installers using repository secrets
+        required: true
+        default: false
+        type: boolean
+      tag:
+        description: Existing release tag matching package.json (vX.Y.Z)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TZ: Asia/Tokyo
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require manual history-sanitation confirmation
+        run: test "${{ inputs.history_sanitized }}" = "true"
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate the release tag and source commit
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$RELEASE_TAG" = "v$(node -p 'require("./package.json").version')"
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$GITHUB_SHA"
+      - run: npm test
+      - run: npm run check
+
+  mac-installer:
+    needs: preflight
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require Apple signing secrets
+        if: ${{ inputs.sign_installers }}
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: >-
+          test -n "$APPLE_CERTIFICATE_BASE64" && test -n "$APPLE_CERTIFICATE_PASSWORD" &&
+          test -n "$APPLE_API_KEY_BASE64" && test -n "$APPLE_API_KEY_ID" && test -n "$APPLE_API_ISSUER"
+      - name: Import signing identity and notarization key
+        if: ${{ inputs.sign_installers }}
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/leo-sensei.keychain-db"
+          printf '%s' "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          security create-keychain -p temporary "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p temporary "$KEYCHAIN"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$KEYCHAIN" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temporary "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          printf 'APPLE_API_KEY=%s\nAPPLE_API_KEY_ID=%s\nAPPLE_API_ISSUER=%s\n' \
+            "$RUNNER_TEMP/AuthKey.p8" "$APPLE_API_KEY_ID" "$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+      - name: Generate macOS icon from the canonical master
+        run: |
+          test -s public/app-icon.png
+          ICONSET="$RUNNER_TEMP/LeoSensei.iconset"
+          mkdir -p "$ICONSET"
+          sips -z 16 16 public/app-icon.png --out "$ICONSET/icon_16x16.png"
+          sips -z 32 32 public/app-icon.png --out "$ICONSET/icon_16x16@2x.png"
+          sips -z 32 32 public/app-icon.png --out "$ICONSET/icon_32x32.png"
+          sips -z 64 64 public/app-icon.png --out "$ICONSET/icon_32x32@2x.png"
+          sips -z 128 128 public/app-icon.png --out "$ICONSET/icon_128x128.png"
+          sips -z 256 256 public/app-icon.png --out "$ICONSET/icon_128x128@2x.png"
+          sips -z 256 256 public/app-icon.png --out "$ICONSET/icon_256x256.png"
+          sips -z 512 512 public/app-icon.png --out "$ICONSET/icon_256x256@2x.png"
+          sips -z 512 512 public/app-icon.png --out "$ICONSET/icon_512x512.png"
+          sips -z 1024 1024 public/app-icon.png --out "$ICONSET/icon_512x512@2x.png"
+          iconutil -c icns "$ICONSET" -o "$RUNNER_TEMP/leo-sensei.icns"
+          echo "LEO_SENSEI_APP_ICON=$RUNNER_TEMP/leo-sensei.icns" >> "$GITHUB_ENV"
+      - run: npm ci
+      - name: Package and scan the universal app
+        run: |
+          npm run package -- --platform=darwin --arch=universal
+          APP_DIR="$(find out -maxdepth 1 -type d -name '*-darwin-universal' -print -quit)"
+          test -n "$APP_DIR"
+          npm run release:scan -- --platform=darwin "$APP_DIR"
+          APP="$(find "$APP_DIR" -maxdepth 1 -name '*.app' -print -quit)"
+          ICON_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP/Contents/Info.plist")"
+          [[ "$ICON_NAME" == *.icns ]] || ICON_NAME="$ICON_NAME.icns"
+          file "$APP/Contents/Resources/$ICON_NAME" | grep -q 'Apple Icon Image'
+      - name: Verify signed macOS app
+        if: ${{ inputs.sign_installers }}
+        run: |
+          APP_DIR="$(find out -maxdepth 1 -type d -name '*-darwin-universal' -print -quit)"
+          APP="$(find "$APP_DIR" -maxdepth 1 -name '*.app' -print -quit)"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          SIGNING_INFO="$(codesign -dvvv "$APP" 2>&1)"
+          grep -q '^Authority=Developer ID Application:' <<< "$SIGNING_INFO"
+          grep -Eq '^TeamIdentifier=[A-Z0-9]{10}$' <<< "$SIGNING_INFO"
+      - name: Build macOS DMG
+        run: npx electron-forge make --skip-package --platform=darwin --arch=universal
+      - name: Sign, notarize, staple, and verify the DMG
+        if: ${{ inputs.sign_installers }}
+        run: |
+          DMG="$(find out/make -name '*.dmg' -print -quit)"
+          IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+          test -s "$DMG"
+          test -n "$IDENTITY"
+          codesign --force --sign "$IDENTITY" --timestamp "$DMG"
+          xcrun notarytool submit "$DMG" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "$DMG"
+          codesign --verify --verbose=2 "$DMG"
+          xcrun stapler validate "$DMG"
+      - name: Label macOS installer for download
+        run: |
+          DMG="$(find out/make -name '*.dmg' -print -quit)"
+          test -s "$DMG"
+          mv "$DMG" "out/make/Leo Sensei の-nonsense 日本語 for dayday-chan.dmg"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: leo-sensei-macos-universal-dmg
+          path: "out/make/Leo Sensei の-nonsense 日本語 for dayday-chan.dmg"
+          if-no-files-found: error
+
+  windows-installer:
+    needs: preflight
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require and decode Windows signing certificate
+        if: ${{ inputs.sign_installers }}
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) { throw "Windows signing secrets are required" }
+          $certificate = Join-Path $env:RUNNER_TEMP "leo-sensei.pfx"
+          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          "WINDOWS_CERTIFICATE_FILE=$certificate" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WINDOWS_CERTIFICATE_PASSWORD=$env:WINDOWS_CERTIFICATE_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Generate Windows icon from the canonical master
+        shell: pwsh
+        run: |
+          if (-not (Test-Path public/app-icon.png)) { throw "public/app-icon.png is required" }
+          $icon = Join-Path $env:RUNNER_TEMP "leo-sensei.ico"
+          magick public/app-icon.png -define icon:auto-resize=256,128,64,48,32,16 $icon
+          "LEO_SENSEI_APP_ICON=$icon" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - run: npm ci
+      - name: Package and scan the Windows app
+        shell: pwsh
+        run: |
+          npm run package -- --platform=win32 --arch=x64
+          $appDirectory = Get-ChildItem out -Directory | Where-Object Name -Like "*-win32-x64" | Select-Object -First 1
+          if ($null -eq $appDirectory) { throw "Packaged Windows app was not found" }
+          npm run release:scan -- --platform=win32 $appDirectory.FullName
+          $appExe = Get-ChildItem $appDirectory.FullName -Filter "*.exe" | Select-Object -First 1
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($appExe.FullName)
+          if ($null -eq $icon -or $icon.Width -lt 16) { throw "Packaged executable icon is missing" }
+      - name: Build Squirrel Setup executable
+        shell: pwsh
+        run: |
+          npx electron-forge make --skip-package --platform=win32 --arch=x64
+          $setup = Get-ChildItem out/make -Recurse -Filter "*Setup.exe" | Select-Object -First 1
+          if ($null -eq $setup) { throw "Squirrel Setup executable was not found" }
+      - name: Verify Windows installer signature
+        if: ${{ inputs.sign_installers }}
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem out/make -Recurse -Filter "*Setup.exe" | Select-Object -First 1
+          $signature = Get-AuthenticodeSignature $setup.FullName
+          if ($signature.Status -ne "Valid" -or $null -eq $signature.SignerCertificate) { throw "Squirrel Setup signature is not valid" }
+      - name: Label Windows installer for download
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem out/make -Recurse -Filter "*Setup.exe" | Select-Object -First 1
+          if ($null -eq $setup) { throw "Squirrel Setup executable was not found" }
+          Move-Item $setup.FullName (Join-Path $setup.Directory.FullName "Leo Sensei の-nonsense 日本語 for e-san Setup.exe")
+      - uses: actions/upload-artifact@v7
+        with:
+          name: leo-sensei-windows-x64-setup
+          path: "out/make/**/Leo Sensei の-nonsense 日本語 for e-san Setup.exe"
+          if-no-files-found: error
+
+  linux-installer:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install Debian packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes fakeroot
+          command -v dpkg-deb
+          command -v fakeroot
+      - run: npm ci
+      - name: Package and scan the Linux app
+        env:
+          LEO_SENSEI_APP_ICON: ${{ github.workspace }}/public/app-icon.png
+        run: |
+          npm run package -- --platform=linux --arch=x64
+          APP_DIR="$(find out -maxdepth 1 -type d -name '*-linux-x64' -print -quit)"
+          test -n "$APP_DIR"
+          npm run release:scan -- --platform=linux "$APP_DIR"
+      - name: Build and verify the Debian package
+        env:
+          LEO_SENSEI_APP_ICON: ${{ github.workspace }}/public/app-icon.png
+        run: |
+          npm run make:linux -- --skip-package
+          DEB="$(find out/make -name '*.deb' -print -quit)"
+          test -s "$DEB"
+          test "$(dpkg-deb -f "$DEB" Package)" = "leo-sensei-no-nonsense-nihongo"
+          dpkg-deb --fsys-tarfile "$DEB" | tar -xOf - ./usr/share/applications/leo-sensei-no-nonsense-nihongo.desktop | grep -Fx 'Name=Leo Sensei の-nonsense 日本語'
+          mv "$DEB" "out/make/Leo Sensei の-nonsense 日本語 for henry-chan.deb"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: leo-sensei-linux-x64-deb
+          path: "out/make/Leo Sensei の-nonsense 日本語 for henry-chan.deb"
+          if-no-files-found: error
+
+  draft-release:
+    needs: [mac-installer, windows-installer, linux-installer]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: leo-sensei-macos-universal-dmg
+          path: installers/macos
+      - uses: actions/download-artifact@v8
+        with:
+          name: leo-sensei-windows-x64-setup
+          path: installers/windows
+      - uses: actions/download-artifact@v8
+        with:
+          name: leo-sensei-linux-x64-deb
+          path: installers/linux
+      - name: Create the unpublished draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "installers/macos/Leo Sensei の-nonsense 日本語 for dayday-chan.dmg" \
+            "installers/windows/Leo Sensei の-nonsense 日本語 for e-san Setup.exe" \
+            "installers/linux/Leo Sensei の-nonsense 日本語 for henry-chan.deb" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --notes "Start with the [README](https://github.com/${GITHUB_REPOSITORY}#readme) for installation and first-time setup. These friend builds may be unsigned, so Mac and Windows may show a security warning. Only override a warning when this is the release you expected and you trust the person who sent you here." \
+            --title "Leo Sensei の-nonsense 日本語 $RELEASE_TAG"
