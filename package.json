@@ -1,7 +1,7 @@
 {
   "name": "leo-sensei-no-nonsense-nihongo",
   "productName": "Leo Sensei の-nonsense 日本語",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Offline-first Japanese study and review for macOS, Windows, and Linux.",
   "main": "desktop/main.mjs",
   "bin": {

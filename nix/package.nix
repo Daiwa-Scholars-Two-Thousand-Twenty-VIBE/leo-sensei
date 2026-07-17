@@ -7,7 +7,7 @@
 
 buildNpmPackage {
   pname = "leo-sensei-no-nonsense-nihongo";
-  version = "1.0.0";
+  version = "1.0.1";
   src = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.unions [
@@ -26,7 +26,7 @@ buildNpmPackage {
     ];
   };
 
-  npmDepsHash = "sha256-8GNQb4vMIIk3wZkkZyHKarjaOscgdVL/+XTtYKK86z0=";
+  npmDepsHash = "sha256-0mo47U4Xu773zm1EGbbfC8Z0YwyeZE7A5Z82bp4hpqA=";
   npmInstallFlags = [ "--ignore-scripts" ];
   makeCacheWritable = true;
   nativeBuildInputs = [ makeWrapper ];

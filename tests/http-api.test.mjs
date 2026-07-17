@@ -492,8 +492,10 @@ test("HTTP speech stays external and disabled when no loopback endpoint is confi
 test("HTTP daily status prewarms queued pronunciations without exposing readings", (_, done) => {
   const files = fixture();
   const requests = [];
+  const { promise: prewarmed, resolve: markPrewarmed } = Promise.withResolvers();
   const ttsFetch = (_url, options) => (
     requests.push(JSON.parse(options.body)),
+    markPrewarmed(),
     Promise.resolve(new Response(Buffer.from("RIFFprewarm"), {
       status: 200,
       headers: { "Content-Type": "audio/wav" },
@@ -511,7 +513,7 @@ test("HTTP daily status prewarms queued pronunciations without exposing readings
       assert.equal(daily.status, 200);
       assert.equal(daily.body.speechAvailable, true);
       assert.equal(Object.hasOwn(daily.body.queue[0], "reading"), false);
-      setImmediate(() => {
+      prewarmed.then(() => {
         assert.equal(requests.length, 1);
         assert.deepEqual(requests[0], {
           input: "まねく",
