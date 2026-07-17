@@ -145,10 +145,10 @@ Explicit `--catalog-out` and `--events-out` paths are available for a one-time l
 
 ## Sources and licenses
 
-The application source is available under the [ISC License](LICENSE).
+The application source is available under the [GNU General Public License v3.0 or later](LICENSE). You may use, change, share, or sell it. If you distribute a changed version, you must also make its corresponding source available under the same license.
 
 The bundled N5-N1 vocabulary lists are unofficial JLPT approximations derived from `open-anki-jlpt-decks`, pinned at commit `1ad66734417aca9dbcca6b2d5ee440cb13ab3ba0`. The JLPT does not publish official vocabulary lists. The source deck project is distributed under the MIT License, Copyright (c) 2020 Jamie Sinclair.
 
 The product may use material from the JMdict and KANJIDIC2 dictionary files. Copyright is held by the Electronic Dictionary Research and Development Group and contributors, and the dictionary material is used under CC BY-SA 4.0.
 
-FSRS scheduling uses `ts-fsrs`, Japanese input uses WanaKana, and the desktop application uses Electron. Dependencies and data sources retain their own terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the complete notices.
+FSRS scheduling uses `ts-fsrs`, Japanese input uses WanaKana, and the desktop application uses Electron. Dependencies and data sources retain their own terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for licensing details and release requirements.

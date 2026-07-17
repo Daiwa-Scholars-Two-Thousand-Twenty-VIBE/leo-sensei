@@ -26,7 +26,7 @@ buildNpmPackage {
     ];
   };
 
-  npmDepsHash = "sha256-3af0mftCKTRm6AMVjxYOBnNO3EyxLT3P7ONJ2x3X2Ng=";
+  npmDepsHash = "sha256-UZEMRXPfp7oipjC4rfJiSBrJuXvlcXcIQNcXLQVk5Cg=";
   npmInstallFlags = [ "--ignore-scripts" ];
   makeCacheWritable = true;
   nativeBuildInputs = [ makeWrapper ];
@@ -57,7 +57,7 @@ buildNpmPackage {
 
   meta = {
     description = "Japanese spaced-repetition CLI and loopback review server";
-    license = lib.licenses.isc;
+    license = lib.licenses.gpl3Plus;
     mainProgram = "leo-sensei";
     platforms = lib.platforms.unix;
   };

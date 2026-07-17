@@ -1,11 +1,14 @@
 # Third-Party Notices
 
-Leo Sensei の-nonsense 日本語 is ISC-licensed. The following components and data are not relicensed under ISC.
+Leo Sensei の-nonsense 日本語 is licensed under GPL-3.0-or-later. The following components and data keep their own licenses and are not relicensed under the GPL.
 
 ## Runtime Libraries
 
 | Component | Purpose | License |
 | --- | --- | --- |
+| [Electron](https://www.electronjs.org/) | Desktop runtime | MIT |
+| [electron-squirrel-startup](https://github.com/mongodb-js/electron-squirrel-startup) | Windows installer startup handling | Apache-2.0 |
+| [get-windows](https://github.com/sindresorhus/get-windows) | Active application detection on Windows | MIT |
 | [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) | Spaced-repetition scheduling | MIT |
 | [WanaKana](https://github.com/WaniKani/WanaKana) | Romaji and kana conversion | MIT |
 

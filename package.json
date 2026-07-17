@@ -27,7 +27,7 @@
   },
   "keywords": [],
   "author": "Daiwa Vibe Tribe",
-  "license": "ISC",
+  "license": "GPL-3.0-or-later",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
     "get-windows": "^9.3.0",
