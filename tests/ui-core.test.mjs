@@ -49,6 +49,49 @@ test("continuing after feedback selects the next queue card", () => {
   assert.equal(next.feedback, null);
 });
 
+test("continuing after a wrong answer does not immediately repeat it when other cards remain", () => {
+  const withFeedback = reduceUi(initialUiState(daily), {
+    type: "review_recorded",
+    daily,
+    feedback: { correct: false },
+  });
+  const next = reduceUi(withFeedback, { type: "continue" });
+
+  assert.equal(next.currentId, "v-1");
+  assert.deepEqual(next.daily.queue.map(({ id }) => id), ["v-1", "k-1"]);
+});
+
+test("successive wrong answers stay behind the entire remaining queue", () => {
+  const fourCards = {
+    ...daily,
+    queue: [
+      daily.queue[0],
+      daily.queue[1],
+      { id: "v-2", promptDirection: "recognition", requiresReading: false },
+      { id: "v-3", promptDirection: "recognition", requiresReading: false },
+    ],
+  };
+  const afterFirstWrong = reduceUi(initialUiState(fourCards), {
+    type: "review_recorded",
+    daily: fourCards,
+    feedback: { correct: false },
+  });
+  const reviewingSecond = reduceUi(afterFirstWrong, { type: "continue" });
+  const serverPrioritizesFirstWrong = {
+    ...fourCards,
+    queue: [fourCards.queue[0], fourCards.queue[2], fourCards.queue[3], fourCards.queue[1]],
+  };
+  const afterSecondWrong = reduceUi(reviewingSecond, {
+    type: "review_recorded",
+    daily: serverPrioritizesFirstWrong,
+    feedback: { correct: false },
+  });
+  const next = reduceUi(afterSecondWrong, { type: "continue" });
+
+  assert.equal(next.currentId, "v-2");
+  assert.deepEqual(next.daily.queue.map(({ id }) => id), ["v-2", "v-3", "k-1", "v-1"]);
+});
+
 test("redo returns directly to the voided card even when another card leads the queue", () => {
   const withFeedback = reduceUi(initialUiState(daily), {
     type: "review_recorded",

@@ -7,6 +7,24 @@ export const requiredPhase = (card) =>
 
 const selectedCard = (daily, currentId) => daily?.queue?.find(({ id }) => id === currentId) ?? null;
 
+const reconciledReviewQueue = (previousDaily, refreshedDaily, currentId, correct) => ((entriesById) => ((preservedIds) => [
+  ...(previousDaily?.queue ?? [])
+    .filter(({ id }) => id !== currentId && entriesById.has(id))
+    .map(({ id }) => entriesById.get(id)),
+  ...(refreshedDaily?.queue ?? [])
+    .filter(({ id }) => id !== currentId && !preservedIds.has(id)),
+  ...(!correct && entriesById.has(currentId) ? [entriesById.get(currentId)] : []),
+])(new Set((previousDaily?.queue ?? [])
+  .map(({ id }) => id)
+  .filter((id) => id !== currentId && entriesById.has(id)))))(
+  new Map((refreshedDaily?.queue ?? []).map((entry) => [entry.id, entry])),
+);
+
+const reconcileDailyReview = (previousDaily, refreshedDaily, currentId, correct) => ({
+  ...refreshedDaily,
+  queue: reconciledReviewQueue(previousDaily, refreshedDaily, currentId, correct),
+});
+
 export const initialUiState = (daily = null) => ({
   daily,
   currentId: daily?.queue?.[0]?.id ?? null,
@@ -33,7 +51,7 @@ const reducers = Object.freeze({
   request_started: (state) => ({ ...state, submitting: true, error: null }),
   review_recorded: (state, event) => ({
     ...state,
-    daily: event.daily,
+    daily: reconcileDailyReview(state.daily, event.daily, state.currentId, event.feedback.correct),
     feedback: {
       ...event.feedback,
       cardType: selectedCard(state.daily, state.currentId)?.type ?? "vocabulary",
