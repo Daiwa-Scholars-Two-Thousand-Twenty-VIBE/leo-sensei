@@ -230,10 +230,11 @@ export const recordReview = ({ context, eventsFile, input, now = new Date().toIS
         );
 };
 
-export const recordBypass = ({ context, eventsFile, reason, now = new Date().toISOString() }, callback) => {
+export const recordBypass = ({ context, eventsFile, reason, durationMinutes, now = new Date().toISOString() }, callback) => {
   const bypass = createEmergencyUnlockEvent({
     reason,
     requiredDailyCount: context.settings.requiredDailyCount,
+    durationMinutes,
     now,
   });
   const existing = bypass.ok

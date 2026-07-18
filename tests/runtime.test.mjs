@@ -138,7 +138,8 @@ test("recordBypass persists one emergency unlock per source day", (_, done) => {
         assert.equal(recorded.value.event.type, "emergency_unlock_granted");
         assert.equal(recorded.value.event.targetStudyDate, "2026-07-16");
         assert.equal(recorded.value.event.carryoverCount, 50);
-        assert.equal(recorded.value.event.expiresAt, "2026-07-15T01:30:00.000Z");
+        assert.equal(recorded.value.event.durationMinutes, 240);
+        assert.equal(recorded.value.event.expiresAt, "2026-07-15T05:00:00.000Z");
         loadDailyContext({ ...files, now: "2026-07-15T01:01:00.000Z" }, (reloaded) =>
           recordBypass(
             { context: reloaded.value, eventsFile: files.eventsFile, reason: "Second request", now: "2026-07-15T01:01:00.000Z" },

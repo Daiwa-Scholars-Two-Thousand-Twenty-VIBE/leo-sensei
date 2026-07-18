@@ -26,7 +26,7 @@ test("first-run and Settings show optional apps with plain terminal guidance", (
 });
 
 test("emergency unlock explains the next-day review charge before confirmation", () => {
-  assert.match(appSource, /This unlocks your selected browsers for 30 minutes\./u);
+  assert.match(appSource, /This unlocks your selected browsers for \$\{durationLabel\(state\.daily\.bypassMinutes\)\}\./u);
   assert.match(appSource, /reviews will be added tomorrow/u);
 });
 

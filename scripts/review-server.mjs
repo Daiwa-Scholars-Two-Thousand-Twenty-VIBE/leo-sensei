@@ -8,6 +8,7 @@ import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseJsonResult } from "./lib/learner-core.mjs";
+import { defaultBypassMinutes } from "./lib/daily-session.mjs";
 import {
   createBackup,
   importDelimitedCatalog,
@@ -116,17 +117,42 @@ const queuedSpeechTexts = (context) => context.queue
   .map(cardSpeechText)
   .filter(Boolean);
 
-const publicDaily = (context, mode, speechAvailable = false) => ({
+const dueReviewCount = (context, now) => Object.values(context.cardStates.cardsById ?? {})
+  .filter(({ cardId, dueAt, status }) => status === "fsrs"
+    && Date.parse(dueAt ?? "") <= Date.parse(now)
+    && ["kanji", "vocabulary"].includes((context.catalog.cards ?? []).find((card) => card.id === cardId)?.type))
+  .length;
+
+const availableReviewCount = (context, now) => {
+  const states = context.cardStates.cardsById ?? {};
+  return Math.min(500, (context.catalog.cards ?? [])
+    .filter((card) => ["kanji", "vocabulary"].includes(card.type))
+    .filter((card) => ((state) => state?.status === "fsrs" && Date.parse(state.dueAt ?? "") <= Date.parse(now)
+      || state?.status === "marumori")(states[card.id]))
+    .length);
+};
+
+const extraReviewsDoneCount = (context) => new Set(context.events
+  .filter((event) => event.type === "extra_review_answered" && event.correct === true && event.studyDate === context.status.studyDate)
+  .map((event) => event.cardId)).size;
+
+const publicDaily = (context, mode, speechAvailable = false, now = new Date().toISOString(), bypassMinutes = defaultBypassMinutes) => ({
   studyDate: context.status.studyDate,
   complete: context.status.complete,
   accessAllowed: context.access.allowed,
   accessReason: context.access.reason,
   bypassUntil: context.access.expiresAt,
+  bypassMinutes,
+  makeupReviews: context.status.makeupReviews ?? 0,
+  makeupTomorrow: context.status.makeupTomorrow ?? 0,
   failOpen: context.status.failOpen,
   error: context.status.error,
   mode: mode ?? context.settings?.gateMode ?? "off",
   speechAvailable,
   progress: context.status.progress,
+  dueReviews: dueReviewCount(context, now),
+  availableReviews: availableReviewCount(context, now),
+  extraReviewsDone: extraReviewsDoneCount(context),
   todayLesson: ((lesson) => lesson
     ? {
         total: lesson.session.entries.length,
@@ -145,8 +171,8 @@ const publicDaily = (context, mode, speechAvailable = false) => ({
   queue: context.queue,
 });
 
-const publicExtra = (context, extra, mode, speechAvailable = false) => ({
-  ...publicDaily(context, mode, speechAvailable),
+const publicExtra = (context, extra, mode, speechAvailable = false, now = new Date().toISOString(), bypassMinutes = defaultBypassMinutes) => ({
+  ...publicDaily(context, mode, speechAvailable, now, bypassMinutes),
   complete: extra.queue.length === 0,
   dailyComplete: context.status.complete,
   accessAllowed: true,
@@ -314,14 +340,15 @@ const apiHandler = ({
   settingsFile,
   now,
   mode,
+  bypassMinutes,
   mutationToken,
   speechCacheDir,
   ttsEndpoint,
   ttsFetch,
 }) => (request, response, url) => {
   const files = { catalogFile, customListsFile, eventsFile, settingsFile };
-  const dailyPayload = (context) => publicDaily(context, mode, ttsEndpoint !== null);
-  const extraPayload = (context, extra) => publicExtra(context, extra, mode, ttsEndpoint !== null);
+  const dailyPayload = (context) => publicDaily(context, mode, ttsEndpoint !== null, now(), bypassMinutes);
+  const extraPayload = (context, extra) => publicExtra(context, extra, mode, ttsEndpoint !== null, now(), bypassMinutes);
   const load = (callback) => loadDailyContext({ catalogFile, eventsFile, settingsFile, now: now() }, callback);
   const requestSpeech = (text, callback) => loadSpeech({
     cacheDir: speechCacheDir,
@@ -562,13 +589,14 @@ const apiHandler = ({
           loaded.ok
             ? (() => {
                 const bypass = recordBypass(
-                  { context: loaded.value, eventsFile, reason: bodyResult.value.reason, now: now() },
+                  { context: loaded.value, eventsFile, reason: bodyResult.value.reason, durationMinutes: bypassMinutes, now: now() },
                   (recorded) =>
                     recorded.ok
                       ? sendJson(response, recorded.value.alreadyRecorded ? 200 : 201, {
                           bypassUntil: recorded.value.event.expiresAt,
                           targetStudyDate: recorded.value.event.targetStudyDate,
                           carryoverCount: recorded.value.event.carryoverCount,
+                          durationMinutes: recorded.value.event.durationMinutes ?? bypassMinutes,
                           alreadyRecorded: recorded.value.alreadyRecorded,
                         })
                       : sendJson(response, 500, { error: "BYPASS_WRITE_FAILED", message: recorded.error }),
@@ -628,6 +656,8 @@ const staticHandler = (publicDir, wanakanaFile) => (_request, response, url) => 
     : sendFile(response, url.pathname === "/vendor/wanakana.mjs" ? wanakanaFile : join(publicDir, relative));
 };
 
+const positiveMinutes = (value, fallback) => ((minutes) => Number.isFinite(minutes) && minutes > 0 ? minutes : fallback)(Number(value));
+
 export const createReviewServer = ({
   catalogFile = process.env.LEARNER_CATALOG_FILE ?? join(defaultStateDir, "catalog.json"),
   eventsFile = process.env.LEARNER_EVENTS_FILE ?? join(defaultStateDir, "events.jsonl"),
@@ -638,6 +668,7 @@ export const createReviewServer = ({
   wanakanaFile = process.env.LEARNER_WANAKANA_FILE ?? defaultWanakanaFile,
   now = () => new Date().toISOString(),
   mode = process.env.LANGUAGE_GATE_MODE,
+  bypassMinutes = positiveMinutes(process.env.LEARNER_BYPASS_MINUTES, defaultBypassMinutes),
   mutationToken = "",
   speechCacheDir = process.env.LEARNER_SPEECH_CACHE_DIR ?? join(defaultStateDir, "speech-cache"),
   ttsEndpoint = process.env.LEARNER_TTS_ENDPOINT,
@@ -651,6 +682,7 @@ export const createReviewServer = ({
     settingsFile,
     now,
     mode,
+    bypassMinutes,
     mutationToken,
     speechCacheDir,
     ttsEndpoint: normalizeExternalSpeechEndpoint(ttsEndpoint),

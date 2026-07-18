@@ -162,17 +162,23 @@ test("HTTP API exposes daily status and validates bypass reasons", (_, done) => 
             assert.equal(invalid.status, 400);
             requestJson({ port, method: "POST", path: "/api/bypass", body: { reason: "Client call" } }, (valid) => {
               assert.equal(valid.status, 201);
-              assert.equal(valid.body.bypassUntil, "2026-07-15T01:30:00.000Z");
+              assert.equal(valid.body.bypassUntil, "2026-07-15T05:00:00.000Z");
               assert.equal(valid.body.targetStudyDate, "2026-07-16");
               assert.equal(valid.body.carryoverCount, 50);
+              assert.equal(valid.body.durationMinutes, 240);
               assert.equal(valid.body.alreadyRecorded, false);
-              requestJson({ port, method: "POST", path: "/api/alias", body: { cardId: "k-1", kind: "reading", value: "しょう" } }, (alias) => {
-                assert.equal(alias.status, 201);
-                assert.equal(alias.body.alias.type, "reading_alias_added");
-                assert.equal(alias.body.alias.value, "しょう");
-                server.close(() => {
-                  rmSync(files.directory, { recursive: true, force: true });
-                  done();
+              requestJson({ port, path: "/api/daily" }, (bypassed) => {
+                assert.equal(bypassed.body.bypassMinutes, 240);
+                assert.equal(bypassed.body.makeupTomorrow, 50);
+                assert.equal(bypassed.body.availableReviews, 1);
+                requestJson({ port, method: "POST", path: "/api/alias", body: { cardId: "k-1", kind: "reading", value: "しょう" } }, (alias) => {
+                  assert.equal(alias.status, 201);
+                  assert.equal(alias.body.alias.type, "reading_alias_added");
+                  assert.equal(alias.body.alias.value, "しょう");
+                  server.close(() => {
+                    rmSync(files.directory, { recursive: true, force: true });
+                    done();
+                  });
                 });
               });
             });
