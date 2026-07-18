@@ -88,6 +88,39 @@ const progressValues = (daily) => {
   };
 };
 
+const clockTime = (iso) => ((date) => Number.isNaN(date.getTime())
+  ? ""
+  : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }))(new Date(iso ?? ""));
+
+const durationLabel = (value) => ((minutes) => minutes % 60 === 0
+  ? `${minutes / 60} hour${minutes / 60 === 1 ? "" : "s"}`
+  : `${minutes} minutes`)(Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : 240);
+
+const reviewReserve = (daily) => ((progress) => ((completed, total, threshold) => ((markerPct) => ({
+  completed,
+  total,
+  threshold,
+  remaining: Math.max(0, threshold - completed),
+  fillPct: total > 0 ? Math.min(100, completed / total * 100) : 0,
+  markerPct,
+  markerEdge: markerPct > 92 ? "edge-end" : markerPct < 8 ? "edge-start" : "",
+  makeup: Number(daily.makeupReviews ?? 0),
+  makeupTomorrow: Number(daily.makeupTomorrow ?? 0),
+  onBypass: ["temporary_bypass", "emergency_unlock"].includes(daily.accessReason),
+  bypassUntil: daily.bypassUntil ?? null,
+  unlocked: Boolean(daily.complete),
+}))(total > 0 ? Math.min(100, threshold / total * 100) : 0))(
+  progress.cleared + Number(daily.extraReviewsDone ?? 0),
+  Math.max(progress.required, Math.min(500, progress.cleared + Number(daily.extraReviewsDone ?? 0) + Number(daily.availableReviews ?? 0))),
+  progress.required,
+))(progressValues(daily));
+
+const reviewActionCopy = (reviews) => reviews.unlocked
+  ? "Complete for today"
+  : reviews.onBypass
+    ? ((time) => `Emergency Unlock Active. It will relock ${time ? `at ${time}` : "soon"}.${reviews.makeupTomorrow > 0 ? ` +${reviews.makeupTomorrow} extra reviews tomorrow.` : ""}`)(clockTime(reviews.bypassUntil))
+    : `Clear ${reviews.remaining} more to unlock${reviews.makeup > 0 ? ` - +${reviews.makeup} from emergency unlock` : ""}`;
+
 const headerMarkup = (state) => {
   const progress = progressValues(state.daily);
   const accessOpen = state.daily.accessAllowed;
@@ -207,8 +240,8 @@ const completeMarkup = (state) => `
   </section>`;
 
 const bypassDescription = (state) => state.gateBehavior === "prompt"
-  ? `This pauses review reminders for 30 minutes. ${Math.ceil(state.settings.requiredDailyCount / 2)} reviews will be added tomorrow.`
-  : `This unlocks your selected browsers for 30 minutes. ${Math.ceil(state.settings.requiredDailyCount / 2)} reviews will be added tomorrow.`;
+  ? `This pauses review reminders for ${durationLabel(state.daily.bypassMinutes)}. ${Math.ceil(state.settings.requiredDailyCount / 2)} reviews will be added tomorrow.`
+  : `This unlocks your selected browsers for ${durationLabel(state.daily.bypassMinutes)}. ${Math.ceil(state.settings.requiredDailyCount / 2)} reviews will be added tomorrow.`;
 
 const bypassMarkup = (state) => state.bypassOpen
   ? `<dialog id="bypassDialog">
@@ -218,7 +251,7 @@ const bypassMarkup = (state) => state.bypassOpen
         <textarea id="bypassReason" name="reason" required></textarea>
         <div class="dialog-actions">
           <button id="cancelBypass" class="quiet-button" type="button">Cancel</button>
-          <button class="primary-button" type="submit">Unlock 30 minutes</button>
+          <button class="primary-button" type="submit">Unlock ${durationLabel(state.daily.bypassMinutes)}</button>
         </div>
       </form>
     </dialog>`
@@ -329,16 +362,24 @@ const statsMarkup = (stats) => stats
     </section>`
   : "";
 
-const homeMarkup = (state) => ((progress, plannedNew) => `
+const homeMarkup = (state) => ((reviews, plannedNew) => `
   ${managementHeaderMarkup(state, "Today")}
   <main class="home-main">
     <section class="home-actions">
-      <button id="homeReviewButton" class="home-action review-action" type="button"><span>Reviews</span><strong>${progress.cleared} / ${progress.required}</strong><small>${state.daily.complete ? "Complete for today" : `${state.daily.queue.length} ready now`}</small></button>
+      <button id="homeReviewButton" class="home-action review-action" type="button">
+        <span>Reviews</span>
+        <strong>${reviews.completed} / ${reviews.total}</strong>
+        <span class="review-reserve-track" aria-label="${reviews.completed} of ${reviews.total} reviews done, unlock at ${reviews.threshold}">
+          <span class="review-reserve-fill" style="width:${reviews.fillPct}%"></span>
+          <span class="review-unlock-marker ${reviews.markerEdge}" style="left:${reviews.markerPct}%" title="Unlock at ${reviews.threshold}"><span>${reviews.threshold}</span></span>
+        </span>
+        <small>${reviewActionCopy(reviews)}</small>
+      </button>
       <button id="homeLessonButton" class="home-action lesson-action" type="button" ${plannedNew === 0 ? "disabled" : ""}><span>Learn new words</span><strong>${state.daily.todayLesson?.completed ?? 0} / ${state.daily.todayLesson?.total || plannedNew}</strong><small>${plannedNew === 0 ? "Set a study list" : state.daily.todayLesson?.total > 0 ? "Lesson in progress" : "Ready when you are"}</small></button>
     </section>
     ${statsMarkup(state.stats)}
     <section class="home-lists"><div class="pane-heading"><span>Plan</span><h2>Study lists</h2></div>${dailyNewSummaryMarkup(state)}<button class="quiet-button" data-view="lists" type="button">Manage lists</button></section>
-  </main>`)(progressValues(state.daily), state.studyLists.reduce((total, list) => total + Number(state.settings.studyListDailyNew?.[list.id] ?? 0), 0));
+  </main>`)(reviewReserve(state.daily), state.studyLists.reduce((total, list) => total + Number(state.settings.studyListDailyNew?.[list.id] ?? 0), 0));
 
 const studyListsMarkup = (state) => `
   ${managementHeaderMarkup(state, "Study lists")}

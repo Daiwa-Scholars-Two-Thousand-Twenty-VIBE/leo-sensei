@@ -65,8 +65,10 @@ const isDue = (state, nowTime) => Boolean(
   && asTime(state.dueAt) <= nowTime,
 );
 
-const isImportedUnscheduled = (card, state) => Boolean(
-  (state?.status === "unscheduled" || !state || !state.dueAt)
+const isReactivatableBacklog = (card, state) => Boolean(
+  state
+  && state.status === "marumori"
+  && Number.isFinite(asTime(state.dueAt, Number.NaN))
   && isImported(card),
 );
 
@@ -116,6 +118,8 @@ const limitWeights = Object.freeze([
 ]);
 
 const positiveCount = (value) => Number.isInteger(value) && value > 0 ? value : 100;
+
+export const defaultBypassMinutes = 240;
 
 const nextStudyDate = (value) => new Date(Date.parse(`${value}T00:00:00.000Z`) + (24 * 60 * 60 * 1000))
   .toISOString()
@@ -182,21 +186,20 @@ export const selectDailySession = ({ cards, cardStates, events = [], now, requir
       .filter((card) => isDue(states[card.id], nowTime))
       .sort(dueComparator(states, nowTime));
     const due = allDue.slice(0, scheduledLimit);
-    const pool = [...typedCards]
-      .filter((card) => isImportedUnscheduled(card, states[card.id]))
-      .filter((card) => !due.some(({ id }) => id === card.id))
-      .sort(poolComparator(states));
-    const fillers = pool.slice(0, Math.max(0, scheduledLimit - due.length));
-    const fillerIds = new Set(fillers.map(({ id }) => id));
-    const selectedIds = new Set([...due, ...fillers].map(({ id }) => id));
+    const selectedIds = new Set(due.map(({ id }) => id));
     const remainingDue = allDue.filter((card) => !selectedIds.has(card.id));
+    const backlog = [...typedCards]
+      .filter((card) => isReactivatableBacklog(card, states[card.id]))
+      .filter((card) => !selectedIds.has(card.id))
+      .sort(poolComparator(states));
+    const backlogIds = new Set(backlog.map(({ id }) => id));
     const reactivations = [
       ...remainingDue.filter((card) => isLocalFsrs(states[card.id])),
-      ...pool.filter(({ id }) => !fillerIds.has(id)),
-      ...remainingDue.filter((card) => !isLocalFsrs(states[card.id])),
+      ...backlog,
+      ...remainingDue.filter((card) => !isLocalFsrs(states[card.id]) && !backlogIds.has(card.id)),
     ].slice(0, reactivationLimit);
     return {
-      scheduled: [...due.map(sessionCard("due")), ...fillers.map(sessionCard("pool"))],
+      scheduled: due.map(sessionCard("due")),
       reactivations: reactivations.map(sessionCard("reactivation")),
     };
   });
@@ -247,6 +250,8 @@ const errorStatus = (now, message) => ({
   failOpen: true,
   error: message,
   bypass: null,
+  makeupReviews: 0,
+  makeupTomorrow: 0,
   progress: {
     scheduled: { required: 0, attempted: 0, eventuallyCorrect: 0, accuracy: 0 },
     reactivations: { required: 0, attempted: 0, eventuallyCorrect: 0, accuracy: 0 },
@@ -280,12 +285,14 @@ export const deriveDailyStatus = ({ session, events = [], now }) => validSession
           reason: bypass.reason,
           expiresAt: bypass.expiresAt,
         } : null,
+        makeupReviews: carryoverForStudyDate(events, session.studyDate),
+        makeupTomorrow: carryoverForStudyDate(events, nextStudyDate(session.studyDate)),
         progress: { scheduled: scheduledProgress, reactivations: reactivationProgress },
       };
     })()
   : errorStatus(now, "Daily session is missing or invalid.");
 
-export const createBypassEvent = ({ reason, now }) => String(reason ?? "").trim()
+export const createBypassEvent = ({ reason, now, durationMinutes = defaultBypassMinutes }) => String(reason ?? "").trim()
   ? {
       ok: true,
       event: {
@@ -293,12 +300,13 @@ export const createBypassEvent = ({ reason, now }) => String(reason ?? "").trim(
         studyDate: studyDate(now),
         occurredAt: asDate(now).toISOString(),
         reason: String(reason).trim(),
-        expiresAt: new Date(asDate(now).getTime() + (30 * 60 * 1000)).toISOString(),
+        durationMinutes,
+        expiresAt: new Date(asDate(now).getTime() + (durationMinutes * 60 * 1000)).toISOString(),
       },
     }
   : { ok: false, error: "Bypass reason is required." };
 
-export const createEmergencyUnlockEvent = ({ reason, requiredDailyCount, now, timeZone }) => String(reason ?? "").trim()
+export const createEmergencyUnlockEvent = ({ reason, requiredDailyCount, now, timeZone, durationMinutes = defaultBypassMinutes }) => String(reason ?? "").trim()
   ? ((baseRequiredCount) => ((sourceStudyDate) => ({
       ok: true,
       event: {
@@ -309,7 +317,8 @@ export const createEmergencyUnlockEvent = ({ reason, requiredDailyCount, now, ti
         reason: String(reason).trim(),
         baseRequiredCount,
         carryoverCount: Math.ceil(baseRequiredCount / 2),
-        expiresAt: new Date(asDate(now).getTime() + (30 * 60 * 1000)).toISOString(),
+        durationMinutes,
+        expiresAt: new Date(asDate(now).getTime() + (durationMinutes * 60 * 1000)).toISOString(),
       },
     }))(studyDate(now, timeZone)))(positiveCount(requiredDailyCount))
   : { ok: false, error: "Bypass reason is required." };

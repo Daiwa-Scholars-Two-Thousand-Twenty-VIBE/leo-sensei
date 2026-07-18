@@ -89,7 +89,7 @@ test("custom and JLPT cards stay out of Reviews until learned", () => {
   assert.deepEqual(new Set(learnedAndDue.scheduled.map(({ cardId }) => cardId)), new Set(cards.map(({ id }) => id)));
 });
 
-test("selectDailySession caps, prioritizes, fills, and separates reactivations", () => {
+test("selectDailySession caps, prioritizes, and separates studied reactivations", () => {
   const now = "2026-07-15T03:00:00.000Z";
   const dueKanji = Array.from({ length: 30 }, (_, index) => makeCard("kanji", index));
   const dueVocabulary = Array.from({ length: 60 }, (_, index) => makeCard("vocabulary", index));
@@ -108,9 +108,9 @@ test("selectDailySession caps, prioritizes, fills, and separates reactivations",
   assert.equal(session.scheduled.filter(({ type }) => type === "kanji").length, 25);
   assert.equal(session.scheduled.filter(({ type }) => type === "vocabulary").length, 50);
   assert.deepEqual(session.scheduled.slice(0, 25).map(({ cardId }) => cardId), dueKanji.slice(0, 25).map(({ id }) => id));
-  assert.equal(session.reactivations.filter(({ type }) => type === "kanji").length, 10);
-  assert.equal(session.reactivations.filter(({ type }) => type === "vocabulary").length, 15);
-  assert.equal(new Set([...session.scheduled, ...session.reactivations].map(({ cardId }) => cardId)).size, 100);
+  assert.equal(session.reactivations.filter(({ type }) => type === "kanji").length, 5);
+  assert.equal(session.reactivations.filter(({ type }) => type === "vocabulary").length, 10);
+  assert.equal(new Set([...session.scheduled, ...session.reactivations].map(({ cardId }) => cardId)).size, 90);
   assert.equal(session.scheduled.filter(({ type, promptDirection }) => type === "vocabulary" && promptDirection === "reverse").length, 5);
   assert.equal(session.reactivations.every(({ promptDirection }) => promptDirection === "recognition"), true);
 });
@@ -133,20 +133,19 @@ test("selectDailySession ranks due cards by overdue time, weakness, leech status
   assert.deepEqual(session.scheduled.map(({ cardId }) => cardId), ["kanji-01", "kanji-03", "kanji-02", "kanji-04"]);
 });
 
-test("selectDailySession fills scheduled shortfalls without duplicating pool reactivations", () => {
+test("selectDailySession does not fill required reviews from never-studied imports", () => {
   const dueKanji = Array.from({ length: 20 }, (_, index) => makeCard("kanji", index));
-  const poolKanji = Array.from({ length: 20 }, (_, index) => makeCard("kanji", index + 30));
+  const unseenKanji = Array.from({ length: 20 }, (_, index) => makeCard("kanji", index + 30));
   const session = selectDailySession({
-    cards: [...dueKanji, ...poolKanji],
+    cards: [...dueKanji, ...unseenKanji],
     cardStates: dueKanji.map((card) => makeState(card, "2026-07-01T00:00:00.000Z")),
     events: [],
     now: "2026-07-15T03:00:00.000Z",
   });
 
-  assert.equal(session.scheduled.length, 25);
-  assert.equal(session.scheduled.filter(({ source }) => source === "pool").length, 5);
-  assert.equal(session.reactivations.length, 10);
-  assert.equal(new Set([...session.scheduled, ...session.reactivations].map(({ cardId }) => cardId)).size, 35);
+  assert.equal(session.scheduled.length, 20);
+  assert.equal(session.reactivations.length, 0);
+  assert.deepEqual(session.scheduled.map(({ cardId }) => cardId), dueKanji.map(({ id }) => id));
 });
 
 test("selectDailySession falls back to unused due imports when the unscheduled reactivation pool is exhausted", () => {
@@ -315,7 +314,7 @@ test("extra review events never count toward the frozen gate queue", () => {
   assert.equal(status.progress.scheduled.attempted, 0);
 });
 
-test("bypass requires a reason, unlocks immediately, and expires after 30 minutes", () => {
+test("bypass requires a reason, unlocks immediately, and expires after 4 hours", () => {
   const invalid = createBypassEvent({ reason: "  ", now: "2026-07-15T03:00:00.000Z" });
   const valid = createBypassEvent({ reason: "Client call", now: "2026-07-15T03:00:00.000Z" });
   const session = {
@@ -324,12 +323,13 @@ test("bypass requires a reason, unlocks immediately, and expires after 30 minute
     scheduled: [{ cardId: "v-1", type: "vocabulary" }],
     reactivations: [],
   };
-  const active = deriveDailyStatus({ session, events: [valid.event], now: "2026-07-15T03:29:59.999Z" });
-  const expired = deriveDailyStatus({ session, events: [valid.event], now: "2026-07-15T03:30:00.000Z" });
+  const active = deriveDailyStatus({ session, events: [valid.event], now: "2026-07-15T06:59:59.999Z" });
+  const expired = deriveDailyStatus({ session, events: [valid.event], now: "2026-07-15T07:00:00.000Z" });
 
   assert.deepEqual(invalid, { ok: false, error: "Bypass reason is required." });
   assert.equal(valid.ok, true);
-  assert.equal(valid.event.expiresAt, "2026-07-15T03:30:00.000Z");
+  assert.equal(valid.event.durationMinutes, 240);
+  assert.equal(valid.event.expiresAt, "2026-07-15T07:00:00.000Z");
   assert.deepEqual(gateAccess(active), { allowed: true, reason: "temporary_bypass", expiresAt: valid.event.expiresAt });
   assert.deepEqual(gateAccess(expired), { allowed: false, reason: "study_incomplete", expiresAt: null });
 });
@@ -358,8 +358,23 @@ test("emergency unlock snapshots a ceiling-half carryover for the literal next s
     reason: "Client call",
     baseRequiredCount: 21,
     carryoverCount: 11,
-    expiresAt: "2026-07-15T03:30:00.000Z",
+    durationMinutes: 240,
+    expiresAt: "2026-07-15T07:00:00.000Z",
   });
+});
+
+test("emergency unlock duration is configurable in minutes", () => {
+  const valid = createEmergencyUnlockEvent({
+    reason: "Client call",
+    requiredDailyCount: 21,
+    durationMinutes: 90,
+    now: "2026-07-15T03:00:00.000Z",
+    timeZone: "Asia/Tokyo",
+  });
+
+  assert.equal(valid.ok, true);
+  assert.equal(valid.event.durationMinutes, 90);
+  assert.equal(valid.event.expiresAt, "2026-07-15T04:30:00.000Z");
 });
 
 test("emergency unlock replay deduplicates each source day and increases only the target day", () => {
@@ -424,7 +439,7 @@ test("emergency carryover never changes an already frozen target-day session", (
   }), frozen);
 });
 
-test("emergency unlock preserves the local 30-minute access duration", () => {
+test("emergency unlock preserves the local 4-hour access duration", () => {
   const unlock = createEmergencyUnlockEvent({
     reason: "Client call",
     requiredDailyCount: 21,
@@ -438,11 +453,26 @@ test("emergency unlock preserves the local 30-minute access duration", () => {
     scheduled: [{ cardId: "v-1", type: "vocabulary" }],
     reactivations: [],
   };
-  const active = deriveDailyStatus({ session, events: [unlock], now: "2026-07-15T03:29:59.999Z" });
-  const expired = deriveDailyStatus({ session, events: [unlock], now: "2026-07-15T03:30:00.000Z" });
+  const active = deriveDailyStatus({ session, events: [unlock], now: "2026-07-15T06:59:59.999Z" });
+  const expired = deriveDailyStatus({ session, events: [unlock], now: "2026-07-15T07:00:00.000Z" });
 
   assert.deepEqual(gateAccess(active), { allowed: true, reason: "emergency_unlock", expiresAt: unlock.expiresAt });
   assert.deepEqual(gateAccess(expired), { allowed: false, reason: "study_incomplete", expiresAt: null });
+});
+
+test("deriveDailyStatus exposes current and tomorrow emergency carryover counts", () => {
+  const session = { studyDate: "2026-07-15", startedAt: "2026-07-15T01:00:00.000Z", scheduled: [], reactivations: [] };
+  const status = deriveDailyStatus({
+    session,
+    events: [
+      { type: "emergency_unlock_granted", studyDate: "2026-07-14", occurredAt: "2026-07-14T05:00:00.000Z", targetStudyDate: "2026-07-15", carryoverCount: 50, expiresAt: "2026-07-14T09:00:00.000Z" },
+      { type: "emergency_unlock_granted", studyDate: "2026-07-15", occurredAt: "2026-07-15T02:00:00.000Z", targetStudyDate: "2026-07-16", carryoverCount: 50, expiresAt: "2026-07-15T06:00:00.000Z" },
+    ],
+    now: "2026-07-15T03:00:00.000Z",
+  });
+
+  assert.equal(status.makeupReviews, 50);
+  assert.equal(status.makeupTomorrow, 50);
 });
 
 test("invalid session state fails open for gate consumers", () => {
