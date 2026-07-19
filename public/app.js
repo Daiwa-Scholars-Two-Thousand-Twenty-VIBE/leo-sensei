@@ -345,10 +345,21 @@ const settingsFieldsMarkup = (state, { formId, onboarding = false, submitLabel }
     <div class="form-submit"><button class="primary-button" type="submit" ${state.submitting ? "disabled" : ""}>${submitLabel}</button></div>
   </form>`;
 
+const onboardingGuideMarkup = (state) => `
+  <section class="onboarding-guide" aria-labelledby="onboardingGuideTitle">
+    <div class="onboarding-guide-heading"><span>How it works</span><h2 id="onboardingGuideTitle">A daily rhythm you control</h2></div>
+    <ol>
+      <li><span>1</span><div><strong>Choose your pace</strong><p>Set your required reviews per day, then choose New / day for each study list. New words you learn enter your future reviews, and you can add your own study lists after setup.</p></div></li>
+      <li><span>2</span><div><strong>Finish reviews to unlock</strong><p>When blocking is enabled, selected browsers and apps stay blocked until you finish today’s required reviews.</p></div></li>
+      <li><span>3</span><div><strong>Emergency access has a cost</strong><p>Emergency unlock opens access for ${durationLabel(state.daily.bypassMinutes)} and adds 50 reviews to the next day. Consecutive emergency unlocks accumulate: +50, +100, +150.</p></div></li>
+    </ol>
+  </section>`;
+
 const onboardingMarkup = (state) => `
   <main class="onboarding-shell">
     <div class="onboarding-form-wrap">
       <header class="onboarding-heading"><span class="onboarding-mark" aria-hidden="true">日</span><h1>Leo Sensei <span lang="ja">の-nonsense 日本語</span></h1><p>Choose what you want to study and how many reviews you want to do each day.</p></header>
+      ${onboardingGuideMarkup(state)}
       ${settingsFieldsMarkup(state, { formId: "onboardingForm", onboarding: true, submitLabel: "Start studying" })}
       <button class="source-link" data-view="sources" type="button">Sources and licenses</button>
     </div>
