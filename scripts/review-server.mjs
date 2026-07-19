@@ -125,11 +125,11 @@ const dueReviewCount = (context, now) => Object.values(context.cardStates.cardsB
 
 const availableReviewCount = (context, now) => {
   const states = context.cardStates.cardsById ?? {};
-  return Math.min(500, (context.catalog.cards ?? [])
+  return (context.catalog.cards ?? [])
     .filter((card) => ["kanji", "vocabulary"].includes(card.type))
     .filter((card) => ((state) => state?.status === "fsrs" && Date.parse(state.dueAt ?? "") <= Date.parse(now)
       || state?.status === "marumori")(states[card.id]))
-    .length);
+    .length;
 };
 
 const extraReviewsDoneCount = (context) => new Set(context.events

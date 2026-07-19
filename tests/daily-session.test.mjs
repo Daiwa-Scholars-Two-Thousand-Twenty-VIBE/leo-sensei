@@ -377,7 +377,7 @@ test("emergency unlock duration is configurable in minutes", () => {
   assert.equal(valid.event.expiresAt, "2026-07-15T04:30:00.000Z");
 });
 
-test("emergency unlock replay deduplicates each source day and increases only the target day", () => {
+test("emergency unlock replay deduplicates a source day and compounds consecutive days", () => {
   const first = createEmergencyUnlockEvent({
     reason: "Client call",
     requiredDailyCount: 7,
@@ -385,6 +385,12 @@ test("emergency unlock replay deduplicates each source day and increases only th
     timeZone: "Asia/Tokyo",
   }).event;
   const duplicate = { ...first, occurredAt: "2026-07-15T03:01:00.000Z", carryoverCount: 99 };
+  const second = createEmergencyUnlockEvent({
+    reason: "Client call",
+    requiredDailyCount: 7,
+    now: "2026-07-16T03:00:00.000Z",
+    timeZone: "Asia/Tokyo",
+  }).event;
   const cards = [
     ...Array.from({ length: 10 }, (_, index) => makeCard("kanji", index)),
     ...Array.from({ length: 20 }, (_, index) => makeCard("vocabulary", index)),
@@ -392,6 +398,7 @@ test("emergency unlock replay deduplicates each source day and increases only th
   const cardStates = cards.map((card) => makeState(card, "2026-07-01T00:00:00.000Z"));
 
   assert.equal(carryoverForStudyDate([first, duplicate], "2026-07-16"), 4);
+  assert.equal(carryoverForStudyDate([first, duplicate, second], "2026-07-17"), 8);
   assert.equal(selectDailySession({
     cards,
     cardStates,
@@ -403,11 +410,11 @@ test("emergency unlock replay deduplicates each source day and increases only th
   assert.equal(selectDailySession({
     cards,
     cardStates,
-    events: [first],
+    events: [first, duplicate, second],
     now: "2026-07-17T03:00:00.000Z",
     requiredDailyCount: 7,
     timeZone: "Asia/Tokyo",
-  }).presentationOrder.length, 7);
+  }).presentationOrder.length, 15);
 });
 
 test("emergency carryover never changes an already frozen target-day session", () => {
@@ -472,7 +479,7 @@ test("deriveDailyStatus exposes current and tomorrow emergency carryover counts"
   });
 
   assert.equal(status.makeupReviews, 50);
-  assert.equal(status.makeupTomorrow, 50);
+  assert.equal(status.makeupTomorrow, 100);
 });
 
 test("invalid session state fails open for gate consumers", () => {

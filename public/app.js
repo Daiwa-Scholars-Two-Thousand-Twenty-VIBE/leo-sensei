@@ -96,8 +96,9 @@ const durationLabel = (value) => ((minutes) => minutes % 60 === 0
   ? `${minutes / 60} hour${minutes / 60 === 1 ? "" : "s"}`
   : `${minutes} minutes`)(Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : 240);
 
-const reviewReserve = (daily) => ((progress) => ((completed, total, threshold) => ((markerPct) => ({
+const reviewReserve = (daily) => ((progress) => ((completed, available, total, threshold) => ((markerPct) => ({
   completed,
+  available,
   total,
   threshold,
   remaining: Math.max(0, threshold - completed),
@@ -111,7 +112,8 @@ const reviewReserve = (daily) => ((progress) => ((completed, total, threshold) =
   unlocked: Boolean(daily.complete),
 }))(total > 0 ? Math.min(100, threshold / total * 100) : 0))(
   progress.cleared + Number(daily.extraReviewsDone ?? 0),
-  Math.max(progress.required, Math.min(500, progress.cleared + Number(daily.extraReviewsDone ?? 0) + Number(daily.availableReviews ?? 0))),
+  Number(daily.availableReviews ?? 0),
+  Math.max(progress.required, Number(daily.availableReviews ?? 0)),
   progress.required,
 ))(progressValues(daily));
 
@@ -239,9 +241,11 @@ const completeMarkup = (state) => `
     <div class="completion-actions"><button class="quiet-button" data-view="home" type="button">Home</button>${state.daily.lesson ? "" : `<button id="extraButton" class="primary-button" type="button">${state.daily.extra ? "Another 100" : "Review 100 more"}</button>`}</div>
   </section>`;
 
-const bypassDescription = (state) => state.gateBehavior === "prompt"
-  ? `This pauses review reminders for ${durationLabel(state.daily.bypassMinutes)}. ${Math.ceil(state.settings.requiredDailyCount / 2)} reviews will be added tomorrow.`
-  : `This unlocks your selected browsers for ${durationLabel(state.daily.bypassMinutes)}. ${Math.ceil(state.settings.requiredDailyCount / 2)} reviews will be added tomorrow.`;
+const bypassDescription = (state) => ((makeupTomorrow) => state.gateBehavior === "prompt"
+  ? `This pauses review reminders for ${durationLabel(state.daily.bypassMinutes)}. ${makeupTomorrow} reviews will be added tomorrow.`
+  : `This unlocks your selected browsers for ${durationLabel(state.daily.bypassMinutes)}. ${makeupTomorrow} reviews will be added tomorrow.`)(
+  Number(state.daily.makeupReviews ?? 0) + Math.ceil(state.settings.requiredDailyCount / 2),
+);
 
 const bypassMarkup = (state) => state.bypassOpen
   ? `<dialog id="bypassDialog">
@@ -368,8 +372,8 @@ const homeMarkup = (state) => ((reviews, plannedNew) => `
     <section class="home-actions">
       <button id="homeReviewButton" class="home-action review-action" type="button">
         <span>Reviews</span>
-        <strong>${reviews.completed} / ${reviews.total}</strong>
-        <span class="review-reserve-track" aria-label="${reviews.completed} of ${reviews.total} reviews done, unlock at ${reviews.threshold}">
+        <strong>${reviews.completed} cleared &middot; ${reviews.available.toLocaleString()} available</strong>
+        <span class="review-reserve-track" aria-label="${reviews.completed} reviews cleared, ${reviews.available} available, unlock at ${reviews.threshold}">
           <span class="review-reserve-fill" style="width:${reviews.fillPct}%"></span>
           <span class="review-unlock-marker ${reviews.markerEdge}" style="left:${reviews.markerPct}%" title="Unlock at ${reviews.threshold}"><span>${reviews.threshold}</span></span>
         </span>
