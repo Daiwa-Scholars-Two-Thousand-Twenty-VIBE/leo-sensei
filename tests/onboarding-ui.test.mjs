@@ -12,6 +12,13 @@ test("first-run copy uses plain questions and a browser-first block", () => {
   assert.doesNotMatch(appSource, /Gate mode/u);
 });
 
+test("first-run explains the daily study, blocking, and accumulating emergency cost", () => {
+  assert.match(appSource, /Set your required reviews per day, then choose New \/ day for each study list/u);
+  assert.match(appSource, /New words you learn enter your future reviews/u);
+  assert.match(appSource, /selected browsers and apps stay blocked until you finish today’s required reviews/u);
+  assert.match(appSource, /Consecutive emergency unlocks accumulate: \+50, \+100, \+150/u);
+});
+
 test("Wayland setup and status use reminder wording instead of claiming browser blocking", () => {
   assert.match(appSource, /Linux Wayland cannot block browser windows/u);
   assert.match(appSource, /Reviews waiting/u);

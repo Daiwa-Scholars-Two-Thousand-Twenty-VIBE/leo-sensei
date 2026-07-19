@@ -1838,6 +1838,72 @@ dialog::backdrop {
   line-height: 1.45;
 }
 
+.onboarding-guide {
+  margin: 0 0 34px;
+  padding: 24px 0;
+  border-block: 1px solid var(--line);
+}
+
+.onboarding-guide-heading {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.onboarding-guide-heading > span {
+  color: var(--coral);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.onboarding-guide-heading h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.onboarding-guide ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-guide li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.onboarding-guide li > span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  background: #fff;
+  font-weight: 900;
+}
+
+.onboarding-guide li div {
+  display: grid;
+  gap: 5px;
+}
+
+.onboarding-guide li strong {
+  line-height: 1.35;
+}
+
+.onboarding-guide li p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .form-section {
   min-width: 0;
   display: grid;
@@ -1929,6 +1995,11 @@ dialog::backdrop {
   .onboarding-heading p {
     grid-column: 1 / -1;
     margin-top: 9px;
+  }
+
+  .onboarding-guide ol {
+    grid-template-columns: 1fr;
+    gap: 18px;
   }
 
   .management-topbar {
