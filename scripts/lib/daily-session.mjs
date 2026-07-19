@@ -125,6 +125,10 @@ const nextStudyDate = (value) => new Date(Date.parse(`${value}T00:00:00.000Z`) +
   .toISOString()
   .slice(0, 10);
 
+const previousStudyDate = (value) => new Date(Date.parse(`${value}T00:00:00.000Z`) - (24 * 60 * 60 * 1000))
+  .toISOString()
+  .slice(0, 10);
+
 const uniqueEmergencyUnlocks = (events) => events
   .filter((event) => event.type === "emergency_unlock_granted")
   .toSorted((left, right) => asTime(left.occurredAt) - asTime(right.occurredAt))
@@ -132,11 +136,13 @@ const uniqueEmergencyUnlocks = (events) => events
     (candidate) => candidate.studyDate === event.studyDate,
   ) === index);
 
-export const carryoverForStudyDate = (events = [], targetStudyDate) => uniqueEmergencyUnlocks(events)
-  .filter((event) => event.targetStudyDate === targetStudyDate)
-  .map(({ carryoverCount }) => Number(carryoverCount))
-  .filter((carryoverCount) => Number.isInteger(carryoverCount) && carryoverCount > 0)
-  .reduce((total, carryoverCount) => total + carryoverCount, 0);
+export const carryoverForStudyDate = (events = [], targetStudyDate) => ((previousDay) => ((unlock) => ((carryoverCount) => (
+  unlock && Number.isInteger(carryoverCount) && carryoverCount > 0
+    ? carryoverForStudyDate(events, previousDay) + carryoverCount
+    : 0
+))(Number(unlock?.carryoverCount)))(uniqueEmergencyUnlocks(events).find(
+  (event) => event.studyDate === previousDay && event.targetStudyDate === targetStudyDate,
+)))(previousStudyDate(targetStudyDate));
 
 export const dailyLimits = (requiredDailyCount = 100) => ((count) => ((weighted) => ((remaining) => ((allocated) => ({
   scheduled: {

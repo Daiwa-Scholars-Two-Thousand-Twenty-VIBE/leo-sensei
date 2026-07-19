@@ -115,7 +115,7 @@ const fixture = () => {
 
 const backlogFixture = () => {
   const files = fixture();
-  const cards = Array.from({ length: 200 }, (_, index) => ({
+  const cards = Array.from({ length: 600 }, (_, index) => ({
     id: `v-${String(index).padStart(3, "0")}`,
     type: "vocabulary",
     item: `word ${index}`,
@@ -338,13 +338,16 @@ test("HTTP extra starts an optional batch of at most 100 additional due cards", 
   });
   server.listen(0, "127.0.0.1", () => {
     const port = server.address().port;
-    requestJson({ port, method: "POST", path: "/api/extra", body: {} }, (extra) => {
-      assert.equal(extra.status, 201);
-      assert.equal(extra.body.extra, true);
-      assert.equal(extra.body.queue.length, 100);
-      server.close(() => {
-        rmSync(files.directory, { recursive: true, force: true });
-        done();
+    requestJson({ port, path: "/api/daily" }, (daily) => {
+      assert.equal(daily.body.availableReviews, 600);
+      requestJson({ port, method: "POST", path: "/api/extra", body: {} }, (extra) => {
+        assert.equal(extra.status, 201);
+        assert.equal(extra.body.extra, true);
+        assert.equal(extra.body.queue.length, 100);
+        server.close(() => {
+          rmSync(files.directory, { recursive: true, force: true });
+          done();
+        });
       });
     });
   });
