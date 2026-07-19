@@ -96,6 +96,8 @@ const durationLabel = (value) => ((minutes) => minutes % 60 === 0
   ? `${minutes / 60} hour${minutes / 60 === 1 ? "" : "s"}`
   : `${minutes} minutes`)(Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : 240);
 
+const plannedNewCards = (lists) => lists.reduce((total, list) => total + Number(list.dailyNew ?? 0), 0);
+
 const reviewReserve = (daily) => ((progress) => ((completed, available, total, threshold) => ((markerPct) => ({
   completed,
   available,
@@ -116,6 +118,12 @@ const reviewReserve = (daily) => ((progress) => ((completed, available, total, t
   Math.max(progress.required, Number(daily.availableReviews ?? 0)),
   progress.required,
 ))(progressValues(daily));
+
+const lessonReserve = (daily, plannedNew) => ((total) => ((completed) => ({
+  completed,
+  total,
+  fillPct: total > 0 ? Math.min(100, completed / total * 100) : 0,
+}))(Number(daily.todayLesson?.completed ?? 0)))(Number(daily.todayLesson?.total ?? 0) || plannedNew);
 
 const reviewActionCopy = (reviews) => reviews.unlocked
   ? "Complete for today"
@@ -366,24 +374,24 @@ const statsMarkup = (stats) => stats
     </section>`
   : "";
 
-const homeMarkup = (state) => ((reviews, plannedNew) => `
+const homeMarkup = (state) => ((reviews, plannedNew) => ((lessons) => `
   ${managementHeaderMarkup(state, "Today")}
   <main class="home-main">
     <section class="home-actions">
       <button id="homeReviewButton" class="home-action review-action" type="button">
         <span>Reviews</span>
-        <strong>${reviews.completed} cleared &middot; ${reviews.available.toLocaleString()} available</strong>
-        <span class="review-reserve-track" aria-label="${reviews.completed} reviews cleared, ${reviews.available} available, unlock at ${reviews.threshold}">
+        <strong>${reviews.completed} / ${reviews.available}</strong>
+        <span class="review-reserve-track" aria-label="${reviews.completed} of ${reviews.available} reviews cleared, unlock at ${reviews.threshold}">
           <span class="review-reserve-fill" style="width:${reviews.fillPct}%"></span>
           <span class="review-unlock-marker ${reviews.markerEdge}" style="left:${reviews.markerPct}%" title="Unlock at ${reviews.threshold}"><span>${reviews.threshold}</span></span>
         </span>
         <small>${reviewActionCopy(reviews)}</small>
       </button>
-      <button id="homeLessonButton" class="home-action lesson-action" type="button" ${plannedNew === 0 ? "disabled" : ""}><span>Learn new words</span><strong>${state.daily.todayLesson?.completed ?? 0} / ${state.daily.todayLesson?.total || plannedNew}</strong><small>${plannedNew === 0 ? "Set a study list" : state.daily.todayLesson?.total > 0 ? "Lesson in progress" : "Ready when you are"}</small></button>
+      <button id="homeLessonButton" class="home-action lesson-action" type="button" ${plannedNew === 0 ? "disabled" : ""}><span>Learn new words</span><strong>${lessons.completed} / ${lessons.total}</strong><span class="review-reserve-track" aria-label="${lessons.completed} of ${lessons.total} new words learned"><span class="review-reserve-fill" style="width:${lessons.fillPct}%"></span></span><small>${plannedNew === 0 ? "Set a study list" : state.daily.todayLesson?.total > 0 ? "Lesson in progress" : "Ready when you are"}</small></button>
     </section>
     ${statsMarkup(state.stats)}
     <section class="home-lists"><div class="pane-heading"><span>Plan</span><h2>Study lists</h2></div>${dailyNewSummaryMarkup(state)}<button class="quiet-button" data-view="lists" type="button">Manage lists</button></section>
-  </main>`)(reviewReserve(state.daily), state.studyLists.reduce((total, list) => total + Number(state.settings.studyListDailyNew?.[list.id] ?? 0), 0));
+  </main>`)(lessonReserve(state.daily, plannedNew)))(reviewReserve(state.daily), plannedNewCards(state.studyLists));
 
 const studyListsMarkup = (state) => `
   ${managementHeaderMarkup(state, "Study lists")}

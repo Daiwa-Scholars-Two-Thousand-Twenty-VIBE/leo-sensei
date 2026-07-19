@@ -1689,7 +1689,8 @@ dialog::backdrop {
   font-size: 34px;
 }
 
-.review-action {
+.review-action,
+.lesson-action {
   align-content: space-between;
 }
 
@@ -1742,6 +1743,10 @@ dialog::backdrop {
 .lesson-action {
   border-color: #d49300;
   background: #fff9e8;
+}
+
+.lesson-action .review-reserve-fill {
+  background: #e0a20c;
 }
 
 .home-lists {
