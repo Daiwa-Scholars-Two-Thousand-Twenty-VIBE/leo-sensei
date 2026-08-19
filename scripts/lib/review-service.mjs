@@ -84,7 +84,7 @@ const publicQueueCard = (cardsById) => (entry) => ({
     : {}),
   prompt:
     entry.promptDirection === "reverse"
-      ? cardsById[entry.cardId]?.meanings?.[0] ?? "Meaning"
+      ? cardsById[entry.cardId]?.meanings?.join("; ") || "Meaning"
       : cardsById[entry.cardId]?.item ?? entry.cardId,
   promptDirection: entry.promptDirection,
   requiresReading: entry.promptDirection === "recognition" && requiresReading(cardsById[entry.cardId]),
