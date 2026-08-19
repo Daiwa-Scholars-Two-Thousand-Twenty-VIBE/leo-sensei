@@ -14,7 +14,7 @@ import {
 
 const cards = [
   { id: "k-1", type: "kanji", item: "招", reading: "まねく", meanings: ["beckon"] },
-  { id: "v-1", type: "vocabulary", item: "応募", reading: "おうぼ", meanings: ["application"] },
+  { id: "v-1", type: "vocabulary", item: "応募", reading: "おうぼ", meanings: ["application", "submission"] },
   { id: "v-new", type: "vocabulary", item: "抑える", reading: "おさえる", meanings: ["restrain"] },
 ];
 
@@ -47,7 +47,7 @@ const sessionEvent = {
   session,
 };
 
-test("buildDailyView exposes frozen unanswered cards without their answers", () => {
+test("buildDailyView exposes every reverse meaning without Japanese answers", () => {
   const view = buildDailyView({ cards, cardStates: [], events: [sessionEvent], now: "2026-07-15T01:00:00.000Z" });
 
   assert.equal(view.ok, true);
@@ -58,7 +58,7 @@ test("buildDailyView exposes frozen unanswered cards without their answers", () 
   ]);
   assert.equal("meanings" in view.value.queue[0], false);
   assert.equal("reading" in view.value.queue[0], false);
-  assert.equal(view.value.queue[1].prompt, "application");
+  assert.equal(view.value.queue[1].prompt, "application; submission");
   assert.equal("item" in view.value.queue[1], false);
   assert.equal(view.value.queue[1].prompt.includes("おうぼ"), false);
   assert.equal(view.value.queue[1].prompt.includes("応募"), false);
