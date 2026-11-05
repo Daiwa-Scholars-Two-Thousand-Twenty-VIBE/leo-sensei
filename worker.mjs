@@ -1,5 +1,5 @@
 // <define:__ASSETS__>
-var define_ASSETS_default = ["index.html", "app-icon-192.png", "app-icon.svg", "app-icon.png", "app.js", "grammar-content.mjs", "http.mjs", "onboarding-core.mjs", "reference-content.mjs", "speech.mjs", "styles.css", "ui-core.mjs", "vendor/wanakana.mjs", "voice-customization.mjs", "start.mjs", "manifest.webmanifest", "decks/manifest.json", "decks/n1-vocabulary.json", "decks/n2-vocabulary.json", "decks/n3-vocabulary.json", "decks/n4-vocabulary.json", "decks/n5-vocabulary.json", "decks/study-reference.json.gz", "decks/reference-words/00.json.gz", "decks/reference-words/01.json.gz", "decks/reference-words/02.json.gz", "decks/reference-words/03.json.gz", "decks/reference-words/04.json.gz", "decks/reference-words/05.json.gz", "decks/reference-words/06.json.gz", "decks/reference-words/07.json.gz", "decks/reference-words/08.json.gz", "decks/reference-words/09.json.gz", "decks/reference-words/10.json.gz", "decks/reference-words/11.json.gz", "decks/reference-words/12.json.gz", "decks/reference-words/13.json.gz", "decks/reference-words/14.json.gz", "decks/reference-words/15.json.gz", "decks/reference-words/16.json.gz", "decks/reference-words/17.json.gz", "decks/reference-words/18.json.gz", "decks/reference-words/19.json.gz", "decks/reference-words/20.json.gz", "decks/reference-words/21.json.gz", "decks/reference-words/22.json.gz", "decks/reference-words/23.json.gz", "decks/reference-words/24.json.gz", "decks/reference-words/25.json.gz", "decks/reference-words/26.json.gz", "decks/reference-words/27.json.gz", "decks/reference-words/28.json.gz", "decks/reference-words/29.json.gz", "decks/reference-words/30.json.gz", "decks/reference-words/31.json.gz"];
+var define_ASSETS_default = ["index.html", "app-icon-192.png", "app-icon.svg", "app-icon.png", "app.js", "http.mjs", "onboarding-core.mjs", "reference-content.mjs", "speech.mjs", "styles.css", "sync-client.mjs", "sync-core.mjs", "sync-vault.mjs", "ui-core.mjs", "vendor/wanakana.mjs", "voice-customization.mjs", "start.mjs", "manifest.webmanifest", "decks/manifest.json", "decks/n1-vocabulary.json", "decks/n2-vocabulary.json", "decks/n3-vocabulary.json", "decks/n4-vocabulary.json", "decks/n5-vocabulary.json", "decks/study-reference.json.gz", "decks/reference-words/00.json.gz", "decks/reference-words/01.json.gz", "decks/reference-words/02.json.gz", "decks/reference-words/03.json.gz", "decks/reference-words/04.json.gz", "decks/reference-words/05.json.gz", "decks/reference-words/06.json.gz", "decks/reference-words/07.json.gz", "decks/reference-words/08.json.gz", "decks/reference-words/09.json.gz", "decks/reference-words/10.json.gz", "decks/reference-words/11.json.gz", "decks/reference-words/12.json.gz", "decks/reference-words/13.json.gz", "decks/reference-words/14.json.gz", "decks/reference-words/15.json.gz", "decks/reference-words/16.json.gz", "decks/reference-words/17.json.gz", "decks/reference-words/18.json.gz", "decks/reference-words/19.json.gz", "decks/reference-words/20.json.gz", "decks/reference-words/21.json.gz", "decks/reference-words/22.json.gz", "decks/reference-words/23.json.gz", "decks/reference-words/24.json.gz", "decks/reference-words/25.json.gz", "decks/reference-words/26.json.gz", "decks/reference-words/27.json.gz", "decks/reference-words/28.json.gz", "decks/reference-words/29.json.gz", "decks/reference-words/30.json.gz", "decks/reference-words/31.json.gz"];
 
 // <define:process.argv>
 var define_process_argv_default = [];
@@ -83,7 +83,7 @@ var rename = (from, to, callback) => resultToCallback(Promise.resolve().then(() 
 }), callback);
 var rm = (path, _options, callback) => resultToCallback(Promise.resolve().then(() => set(path, void 0)), callback);
 
-// web/node_modules/@noble/hashes/esm/utils.js
+// ../sensei-phone.5ftjG9/web/node_modules/@noble/hashes/esm/utils.js
 function isBytes(a) {
   return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
 }
@@ -154,7 +154,7 @@ function createHasher(hashCons) {
   return hashC;
 }
 
-// web/node_modules/@noble/hashes/esm/_md.js
+// ../sensei-phone.5ftjG9/web/node_modules/@noble/hashes/esm/_md.js
 function setBigUint64(view, byteOffset, value, isLE) {
   if (typeof view.setBigUint64 === "function")
     return view.setBigUint64(byteOffset, value, isLE);
@@ -274,7 +274,7 @@ var SHA256_IV = /* @__PURE__ */ Uint32Array.from([
   1541459225
 ]);
 
-// web/node_modules/@noble/hashes/esm/sha2.js
+// ../sensei-phone.5ftjG9/web/node_modules/@noble/hashes/esm/sha2.js
 var SHA256_K = /* @__PURE__ */ Uint32Array.from([
   1116352408,
   1899447441,
@@ -414,7 +414,7 @@ var SHA256 = class extends HashMD {
 };
 var sha256 = /* @__PURE__ */ createHasher(() => new SHA256());
 
-// web/node_modules/@noble/hashes/esm/sha256.js
+// ../sensei-phone.5ftjG9/web/node_modules/@noble/hashes/esm/sha256.js
 var sha2562 = sha256;
 
 // web/browser-platform.mjs
@@ -981,9 +981,9 @@ var orderedExtraEntries = (entries, extraSession) => {
   const ranks = new Map((extraSession?.presentationOrder ?? []).map((cardId, index) => [cardId, index]));
   return entries.toSorted((left, right) => (ranks.get(left.cardId) ?? Number.POSITIVE_INFINITY) - (ranks.get(right.cardId) ?? Number.POSITIVE_INFINITY));
 };
-var lessonQueue = (entries, answered, extraSession) => ((ordered) => [
-  ...ordered.filter(({ cardId }) => !attempted(answered, cardId)),
-  ...ordered.filter(({ cardId }) => attempted(answered, cardId) && !eventuallyCorrect(answered, cardId)).toSorted((left, right) => latestAttemptTime(answered, left.cardId) - latestAttemptTime(answered, right.cardId))
+var lessonQueue = (entries, answered, extraSession) => ((ordered2) => [
+  ...ordered2.filter(({ cardId }) => !attempted(answered, cardId)),
+  ...ordered2.filter(({ cardId }) => attempted(answered, cardId) && !eventuallyCorrect(answered, cardId)).toSorted((left, right) => latestAttemptTime(answered, left.cardId) - latestAttemptTime(answered, right.cardId))
 ])(orderedExtraEntries(entries, extraSession));
 var orderedSessionEntries = (session) => {
   const entries = [...session.scheduled, ...session.reactivations];
@@ -1045,9 +1045,9 @@ var extraEntries = ({ cards, cardStates, session, now, limit, selectionSeed }) =
   const cardsById = cardIndex(cards);
   return extraCandidates({ cards, cardStates, session, now }, selectionSeed).slice(0, Math.max(0, Number(limit) || 0)).map(({ cardId }) => ({ cardId, type: cardsById[cardId].type, source: "extra", promptDirection: "recognition" }));
 };
-var extraQueue = (entries, answered, extraSession) => ((ordered) => [
-  ...ordered.filter(({ cardId }) => !attempted(answered, cardId)),
-  ...ordered.filter(({ cardId }) => attempted(answered, cardId) && !eventuallyCorrect(answered, cardId))
+var extraQueue = (entries, answered, extraSession) => ((ordered2) => [
+  ...ordered2.filter(({ cardId }) => !attempted(answered, cardId)),
+  ...ordered2.filter(({ cardId }) => attempted(answered, cardId) && !eventuallyCorrect(answered, cardId))
 ])(orderedExtraEntries(entries, extraSession));
 var createExtraSessionEvent = ({ cards, cardStates, session, now, limit = 100 }) => {
   const occurredAt = new Date(now).toISOString();
@@ -2404,7 +2404,82 @@ var grammarLevelSummary = (points, poolIds) => jlptLevels.map((level) => ((inLev
   inPool: inLevel.filter((point) => poolIds.has(point.id)).length
 }))((Array.isArray(points) ? points : []).filter((point) => point.level === level)));
 
+// public/sync-core.mjs
+var conflict = (message) => Object.assign(new Error(message), { code: "SYNC_CONFLICT" });
+var ordered = (value) => Array.isArray(value) ? value.map(ordered) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered(value[key])])) : value;
+var syncJson = (value) => JSON.stringify(ordered(value));
+var isStudyCard = (card) => ["vocabulary", "kanji"].includes(card.type);
+var isStudyEvent = (event) => !event.type.startsWith("grammar_");
+var limitsOf = (limits, grammar) => Object.fromEntries(
+  Object.entries(limits ?? {}).filter(([key]) => key.startsWith("grammar-") === grammar)
+);
+var portableStudy = ({ version, settings, catalog, customLists, events, studyPlan }) => {
+  const { gateMode, gatedApplications, studyListDailyNew, ...portableSettings } = settings;
+  return {
+    version,
+    settings: { ...portableSettings, studyListDailyNew: limitsOf(studyListDailyNew, false) },
+    catalog: { ...catalog, cards: catalog.cards.filter(isStudyCard) },
+    customLists,
+    events: events.filter(isStudyEvent),
+    ...studyPlan === void 0 ? {} : {
+      studyPlan: { ...studyPlan, dailyLimits: limitsOf(studyPlan.dailyLimits, false) }
+    }
+  };
+};
+var retainLocalStudy = (study, local) => {
+  const localStudyEvents = local.events.filter(isStudyEvent);
+  const events = appendStudyEvents(localStudyEvents, study.events);
+  return {
+    ...study,
+    settings: {
+      ...study.settings,
+      gateMode: local.settings.gateMode,
+      gatedApplications: local.settings.gatedApplications,
+      studyListDailyNew: {
+        ...study.settings.studyListDailyNew,
+        ...limitsOf(local.settings.studyListDailyNew, true)
+      }
+    },
+    catalog: {
+      ...study.catalog,
+      cards: [...study.catalog.cards, ...local.catalog.cards.filter((card) => !isStudyCard(card))]
+    },
+    events: [...local.events, ...events.slice(localStudyEvents.length)],
+    ...study.studyPlan === void 0 ? {} : {
+      studyPlan: {
+        ...study.studyPlan,
+        dailyLimits: { ...study.studyPlan.dailyLimits, ...limitsOf(local.studyPlan?.dailyLimits, true) }
+      }
+    }
+  };
+};
+var identity = (event, body) => event.eventId ? `id:${event.eventId}` : `body:${body}`;
+var indexEvents = (events) => events.reduce((index, event) => {
+  const body = syncJson(event);
+  const id = identity(event, body);
+  if (index.has(id) && index.get(id).body !== body) throw conflict("One review record differs between devices.");
+  if (!index.has(id)) index.set(id, { event, body });
+  return index;
+}, /* @__PURE__ */ new Map());
+var includesEvents = (all, subset) => [...subset].every(([key, { body }]) => all.get(key)?.body === body);
+var unionEvents = (first, second) => {
+  const index = indexEvents(first);
+  const other = indexEvents(second);
+  if ([...other].some(([key, { body }]) => index.has(key) && index.get(key).body !== body)) {
+    throw conflict("One review record differs between devices.");
+  }
+  return [...first, ...[...other].filter(([key]) => !index.has(key)).map(([, { event }]) => event)];
+};
+var appendStudyEvents = (local, incoming) => {
+  if (!includesEvents(indexEvents(incoming), indexEvents(local))) {
+    throw conflict("Sync paused because the incoming copy is missing local review history.");
+  }
+  return unionEvents(local, incoming);
+};
+
 // scripts/review-server.mjs
+var syncPath = "/api/sync/state";
+var syncRevision = (state) => createHash("sha256").update(syncJson(state)).digest("hex");
 var home = define_process_env_default.HOME ?? ".";
 var dataHome = define_process_env_default.XDG_DATA_HOME ?? join(home, ".local", "share");
 var defaultStateDir = define_process_env_default.LEARNER_STATE_DIR ?? join(dataHome, "leo-sensei-no-nonsense-nihongo");
@@ -2911,6 +2986,30 @@ var apiHandler = ({
     (writeResult) => writeResult.ok ? sendJson(response, 200, settingsResult.value) : sendJson(response, 500, { error: "SETTINGS_WRITE_FAILED", message: writeResult.error.message })
   ) : sendJson(response, 503, { error: "STATE_UNAVAILABLE", message: stateResult.error.message })))(bodyResult.ok ? normalizeLearnerSettings(bodyResult.value) : bodyResult));
   const getBackup = () => readLearnerState({ files: files2 }, (stateResult) => stateResult.ok ? sendJson(response, 200, createBackup({ ...stateResult.value, exportedAt: now() })) : sendJson(response, 503, { error: "STATE_UNAVAILABLE", message: stateResult.error.message }));
+  const getSyncState = () => readLearnerState({ files: files2 }, (result) => {
+    if (!result.ok) return sendJson(response, 503, { error: "STATE_UNAVAILABLE", message: result.error.message });
+    const state = portableStudy(result.value);
+    return sendJson(response, 200, { state, revision: syncRevision(state) });
+  });
+  const postSyncState = () => readJsonBody(request, (bodyResult) => {
+    if (!bodyResult.ok || !bodyResult.value?.state?.settings) {
+      return sendJson(response, 400, { error: "INVALID_SYNC", message: "The sync copy is incomplete." });
+    }
+    return readLearnerState({ files: files2 }, (current) => {
+      if (!current.ok) return sendJson(response, 503, { error: "STATE_UNAVAILABLE", message: current.error.message });
+      if (syncRevision(portableStudy(current.value)) !== bodyResult.value.revision) {
+        return sendJson(response, 409, { error: "SYNC_RETRY", message: "Local study data changed during sync." });
+      }
+      const next = validateBackup(bodyResult.value.state);
+      if (!next.ok) return sendJson(response, 400, { error: "INVALID_SYNC", message: next.error.message });
+      try {
+        const state = retainLocalStudy(portableStudy(next.value), current.value);
+        return writeLearnerState({ files: files2, state }, (saved) => saved.ok ? sendJson(response, 200, { synced: true }) : sendJson(response, 500, { error: "SYNC_WRITE_FAILED", message: saved.error.message }));
+      } catch (error3) {
+        return sendJson(response, 409, { error: "SYNC_CONFLICT", message: error3.message });
+      }
+    });
+  });
   const postRestore = () => readJsonBody(request, (bodyResult) => bodyResult.ok ? restoreBackup({ backup: bodyResult.value, files: files2, now: now() }, (restoreResult) => restoreResult.ok ? sendJson(response, 200, {
     restored: true,
     preRestoreBackupFile: restoreResult.value.preRestoreBackupFile
@@ -3148,6 +3247,8 @@ var apiHandler = ({
   ))(studyDate(now(), timeZone))) : sendJson(response, 400, { error: "INVALID_JSON", message: bodyResult.error }));
   const routes = {
     "GET /api/backup": getBackup,
+    [`GET ${syncPath}`]: getSyncState,
+    [`POST ${syncPath}`]: postSyncState,
     "GET /api/daily": getDaily,
     "GET /api/decks": getDecks,
     "GET /api/grammar": getGrammar,
@@ -3242,10 +3343,27 @@ var createReviewServer = (options = {}) => {
     speech: createReviewSpeech(options, stateDirectory),
     resolveTimeZone
   });
+  const serializeState = createSerialQueue();
+  const handleStateRequest = (request, response, url) => request.method === "GET" && url.pathname !== syncPath ? handleApi(request, response, url) : serializeState((release) => {
+    const end = response.end.bind(response);
+    response.end = (...args) => {
+      response.end = end;
+      try {
+        return end(...args);
+      } finally {
+        queueMicrotask(release);
+      }
+    };
+    try {
+      return handleApi(request, response, url);
+    } catch {
+      return sendJson(response, 500, { error: "REQUEST_FAILED" });
+    }
+  });
   const handleStatic = staticHandler(publicDir, wanakanaFile);
   return createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
-    return !loopbackHost(request) ? sendJson(response, 403, { error: "HOST_FORBIDDEN" }) : !jsonMutation(request, url) ? sendJson(response, 415, { error: "JSON_CONTENT_TYPE_REQUIRED" }) : url.pathname.startsWith("/api/") ? handleApi(request, response, url) : handleStatic(request, response, url);
+    return !loopbackHost(request) ? sendJson(response, 403, { error: "HOST_FORBIDDEN" }) : !jsonMutation(request, url) ? sendJson(response, 415, { error: "JSON_CONTENT_TYPE_REQUIRED" }) : url.pathname.startsWith("/api/") ? handleStateRequest(request, response, url) : handleStatic(request, response, url);
   });
 };
 var isMain = define_process_argv_default[1] && fileURLToPath(import.meta.url) === define_process_argv_default[1];
@@ -3258,7 +3376,7 @@ isMain ? createReviewServer().listen(
 // web/worker.mjs
 var scope = new URL(self.registration.scope);
 var cachePrefix = `leo-sensei:${scope.href}:`;
-var cacheName = cachePrefix + "73aacdb1ac6a60bc3e851ab5";
+var cacheName = cachePrefix + "1cf096563c5823bb5cd05b15";
 var assets = define_ASSETS_default.map((path) => new URL(path, scope).href);
 var shell = new URL("index.html", scope);
 var handle = createReviewServer({

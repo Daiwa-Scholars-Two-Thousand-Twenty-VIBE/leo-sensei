@@ -28,7 +28,9 @@ const waitForController = (registration) => {
   });
 };
 
+const syncOrigin = document.querySelector('meta[name="leo-sensei-sync-origin"]')?.content;
 globalThis.leoSenseiWeb = Object.freeze({
+  syncEnabled: location.origin === syncOrigin || ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname),
   speechAvailable: Boolean(globalThis.speechSynthesis && globalThis.SpeechSynthesisUtterance),
   speak: (text) => playJapaneseSpeech({ synthesis: globalThis.speechSynthesis, Utterance: globalThis.SpeechSynthesisUtterance, text }),
   cancelSpeech: () => globalThis.speechSynthesis?.cancel(),

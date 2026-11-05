@@ -6,16 +6,17 @@ import {
   primeNeuralJapaneseSpeech,
 } from "./speech.mjs";
 import { gatedApplicationOptions, onboardingSettings } from "./onboarding-core.mjs";
-import { renderFurigana, renderGrammarBlocks } from "./grammar-content.mjs";
 import { initialUiState, reduceUi, reviewReserve } from "./ui-core.mjs";
 import { confusionMarkup, inlineReferenceMarkup, referenceContentMarkup } from "./reference-content.mjs";
 import { jsonMutationOptions } from "./http.mjs";
+import { createStudySync, syncPanelMarkup } from "./sync-client.mjs";
 import {
   copyVoiceCustomizationPrompt,
   voiceCustomizationContentMarkup,
 } from "./voice-customization.mjs";
 
 const browserBuild = globalThis.leoSenseiWeb;
+const syncEnabled = browserBuild ? browserBuild.syncEnabled : !globalThis.desktop;
 const root = document.querySelector("#app");
 const neuralAudio = new Audio();
 const heardLessonCardIds = new Set();
@@ -38,13 +39,17 @@ const browserSpeechAvailability = (payload) => {
   return payload?.daily ? { ...payload, daily: daily(payload.daily) } : daily(payload);
 };
 
+const appUrl = (path) => browserBuild ? new URL(path.slice(1), import.meta.url) : path;
+
 const fetchJson = (url, options, callback) =>
-  fetch(browserBuild ? new URL(url.slice(1), import.meta.url) : url, options)
+  fetch(appUrl(url), options)
     .then((response) => response.json().then((payload) => ({ response, payload })))
     .then(({ response, payload }) =>
       response.ok
-        ? callback({ ok: true, value: browserSpeechAvailability(payload) })
-        : callback({ ok: false, error: payload.message ?? payload.error ?? response.statusText }))
+        ? (options?.method && options.method !== "GET" && url !== "/api/reading-check"
+            ? studySync?.schedule() : null,
+          callback({ ok: true, value: browserSpeechAvailability(payload) }))
+        : callback({ ok: false, code: payload.error, error: payload.message ?? payload.error ?? response.statusText }))
     .catch((requestError) => callback({ ok: false, error: requestError.message }));
 
 const postJson = (url, body, callback) => fetchJson(
@@ -73,9 +78,19 @@ const deleteJson = (url, callback) => fetchJson(
 
 const fetchValue = (url, options) => new Promise((resolve) => fetchJson(url, options, resolve));
 
+let syncView;
+let allowSyncApply = false;
+const studySync = syncEnabled ? createStudySync({
+  scope: new URL(".", import.meta.url).href,
+  readLocal: () => fetchValue("/api/sync/state"),
+  applyLocal: (data) => fetchValue("/api/sync/state", jsonMutationOptions("POST", data)),
+  canApply: () => allowSyncApply,
+  onApplied: () => allowSyncApply ? bootstrap("Study progress synced.", syncView === "settings" ? "settings" : null) : null,
+}) : null;
+
 const phaseName = (phase) => ({ reading: "Reading", meaning: "Meaning", reverse: "Japanese" })[phase] ?? "Answer";
 
-const kindName = (type) => ({ grammar: "Grammar", kanji: "Kanji", vocabulary: "Vocabulary" })[type] ?? "Review";
+const kindName = (type) => ({ kanji: "Kanji", vocabulary: "Vocabulary" })[type] ?? "Review";
 
 const activeCard = (state) => state.daily?.queue?.find(({ id }) => id === state.currentId) ?? state.daily?.queue?.[0] ?? null;
 
@@ -97,23 +112,8 @@ const speakCard = (card) => speak(card?.speech ?? card?.readings?.[0] ?? card?.i
 
 const cancelSpeech = () => browserBuild ? browserBuild.cancelSpeech() : cancelJapaneseSpeech({ player: neuralAudio });
 
-const grammarDailyComplete = (summary) => Number(summary?.newToday ?? 0) >= Number(summary?.newLimit ?? 0);
-
-const grammarTodayCount = (summary) => Math.min(
-  Number(summary?.newToday ?? 0),
-  Number(summary?.newLimit ?? 0),
-);
-
-const grammarRemainingToday = (summary) => Math.max(
-  0,
-  Number(summary?.newLimit ?? 0) - grammarTodayCount(summary),
-);
-
 const dailyLessonComplete = (daily) => Number(daily?.todayLesson?.total ?? 0) > 0
   && Number(daily?.todayLesson?.completed ?? 0) >= Number(daily?.todayLesson?.total ?? 0);
-
-const grammarTotal = (summary) => (summary?.levels ?? [])
-  .reduce((total, level) => total + Number(level.total ?? 0), 0);
 
 const progressValues = (daily) => {
   const scheduled = daily.progress.scheduled;
@@ -135,7 +135,6 @@ const headerMarkup = (state) => `
       <span class="brand-mark" lang="ja">日</span><span>Japanese Study</span>
     </button>
     <div class="topbar-status">
-      <button class="statistics-button" data-view="grammar" type="button" title="Open grammar"><span aria-hidden="true" lang="ja">文</span><span>Grammar</span></button>
       <button class="statistics-button" data-view="lists" type="button" title="Open study lists"><span aria-hidden="true">≡</span><span>Study lists</span></button>
       ${browserBuild || state.daily.complete ? "" : '<button id="bypassButton" class="quiet-button" type="button">Emergency unlock</button>'}
       <details class="utility-menu"><summary class="icon-button" title="More" aria-label="More"><span aria-hidden="true">•••</span></summary><div>${browserBuild ? "" : '<button data-view="voice" type="button">Voice</button>'}<button data-view="settings" type="button">Settings</button><button data-view="sources" type="button">Sources</button></div></details>
@@ -422,6 +421,7 @@ const onboardingMarkup = (state) => `
       <header class="onboarding-heading"><span class="onboarding-mark" aria-hidden="true">日</span><h1>Leo Sensei <span lang="ja">の-nonsense 日本語</span></h1><p>Choose what you want to study and how many reviews you want to do each day.</p></header>
       ${settingsFieldsMarkup(state, { formId: "onboardingForm", onboarding: true, submitLabel: "Start studying" })}
       ${browserBuild ? `<details><summary>Bring your study progress from your laptop</summary><p>Download a backup from Settings on your laptop, then choose that file here.</p>${restoreFormMarkup}</details>` : ""}
+      ${syncEnabled ? syncPanelMarkup : ""}
       <button class="source-link" data-view="sources" type="button">Sources and licenses</button>
     </div>
   </main>`;
@@ -469,23 +469,7 @@ const levelMarkup = (levels) => ((maximum) => `
   <div class="level-grid">${levels.map((count, index) => `
     <div class="level-row"><span class="level-number">${index + 1}</span><div class="level-track"><div class="level-fill level-${index + 1}" style="width:${count / maximum * 100}%"></div></div><strong>${count}</strong></div>`).join("")}</div>`)(Math.max(1, ...levels));
 
-const grammarProgressMarkup = (summary) => ((progress) => progress ? `
-  <div class="progress-summary grammar-progress-summary">
-    <div class="stat-metric progress-band"><span>Added</span><strong>${Number(progress.added).toLocaleString()} / ${Number(progress.total).toLocaleString()}</strong><small>${Number(progress.notAdded).toLocaleString()} not added</small></div>
-    <div class="stat-metric progress-band"><span>Reviewed</span><strong>${Number(progress.reviewed).toLocaleString()}</strong><small>answered at least once</small></div>
-    <div class="stat-metric progress-band"><span>First review</span><strong>${Number(progress.awaitingReview).toLocaleString()}</strong><small>ready in grammar reviews</small></div>
-    <div class="stat-metric progress-band"><span>Lesson only</span><strong>${Number(progress.lessonOnly).toLocaleString()}</strong><small>no single-blank review</small></div>
-  </div>
-  <div class="level-section"><h3>Review levels</h3>${levelMarkup(progress.levels ?? [])}</div>
-  <div class="grammar-progress-levels"><h3>JLPT coverage</h3><div class="grammar-levels">${(summary.levels ?? []).map((level) => `<div class="grammar-level-row">
-    <span class="grammar-level-name">${escapeHtml(level.level)}</span>
-    <div class="grammar-level-bar"><div class="grammar-level-fill" style="width:${Number(level.total) ? Number(level.inPool) / Number(level.total) * 100 : 0}%"></div></div>
-    <span class="grammar-level-count">${Number(level.inPool).toLocaleString()} / ${Number(level.total).toLocaleString()}</span>
-  </div>`).join("")}</div></div>` : '<p class="grammar-empty">Grammar progress is unavailable.</p>')(summary?.progress);
-
-const cardProgressMarkup = (state) => state.statsTab === "grammar"
-  ? grammarProgressMarkup(state.homeGrammar)
-  : ((progress) => ((levels) => `
+const cardProgressMarkup = (state) => ((progress) => ((levels) => `
       <div class="progress-summary">${(Array.isArray(progress?.bands) ? progress.bands : stageMetrics(levels)).map((band) => progressBandMarkup(state.statsTab, band)).join("")}</div>
       <div class="level-section"><h3>Levels 1 to 9</h3>${levelMarkup(levels)}</div>`)(progress?.levels ?? Array(9).fill(0)))(state.stats.progress?.[state.statsTab]);
 
@@ -496,7 +480,7 @@ const detailedStatsMarkup = (state) => state.stats ? ((mastery, days) => `
     ${activityMarkup(days)}
     <section class="progress-panel" aria-labelledby="progressTitle">
       <div class="detail-heading"><h2 id="progressTitle">Card progress</h2></div>
-      <div class="stats-tabs" role="tablist" aria-label="Card type">${["kanji", "vocabulary", "grammar"].map((type) => `<button class="stats-tab ${state.statsTab === type ? "active" : ""}" type="button" role="tab" aria-selected="${state.statsTab === type}" data-stats-tab="${type}">${kindName(type)}</button>`).join("")}</div>
+      <div class="stats-tabs" role="tablist" aria-label="Card type">${["kanji", "vocabulary"].map((type) => `<button class="stats-tab ${state.statsTab === type ? "active" : ""}" type="button" role="tab" aria-selected="${state.statsTab === type}" data-stats-tab="${type}">${kindName(type)}</button>`).join("")}</div>
       ${cardProgressMarkup(state)}
     </section>
   </section>`)(
@@ -511,9 +495,6 @@ const homeMarkup = (state) => ((reviews, plannedNew) => `
       <div class="home-group vocab-home-group"><div class="home-group-label">Vocab &amp; Kanji</div><div class="home-pair">
         <button id="homeReviewButton" class="home-action review-action review-state-${reviews.unlocked ? reviews.backlogRemaining > 0 ? "unlocked" : "complete" : "pending"}" type="button"><span>Reviews</span><strong>${reviews.completed.toLocaleString()} / ${reviews.total.toLocaleString()}</strong><div class="review-reserve-track" aria-label="${reviews.completed} of ${reviews.total} reviews cleared${browserBuild ? "" : `, unlock at ${reviews.threshold}`}"><div class="review-reserve-fill" style="width:${reviews.fillPct}%"></div>${browserBuild ? "" : `<div class="review-unlock-marker" style="left:${reviews.markerPct}%" title="Unlock at ${reviews.threshold}">${reviews.threshold}</div>`}</div><small>${browserBuild ? `${reviews.backlogRemaining.toLocaleString()} reviews remain` : reviews.unlocked ? reviews.backlogRemaining === 0 ? "All reviews cleared · laptop unlocked" : `Laptop unlocked · ${reviews.backlogRemaining.toLocaleString()} reviews remain` : `Clear ${Math.max(0, reviews.threshold - reviews.gateCleared)} more to unlock your computer`}</small></button>
         <button id="homeLessonButton" class="home-action lesson-action" type="button" ${plannedNew === 0 || state.submitting ? "disabled" : ""}><span>${dailyLessonComplete(state.daily) ? "Learn more words" : "Learn new words"}</span><strong>${state.daily.todayLesson?.completed ?? 0} / ${state.daily.todayLesson?.total || plannedNew}</strong><div class="review-reserve-track"><div class="review-reserve-fill" style="width:${state.daily.todayLesson?.total ? Number(state.daily.todayLesson.completed ?? 0) / Number(state.daily.todayLesson.total) * 100 : 0}%"></div></div><small>${plannedNew === 0 ? "Set a study list" : dailyLessonComplete(state.daily) ? "Add another batch" : state.daily.todayLesson?.total > 0 ? "Lesson in progress" : "Ready when you are"}</small></button>
-      </div></div>
-      <div class="home-group grammar-home-group"><div class="home-group-label">Grammar</div><div class="home-pair">
-        ${state.homeGrammar ? `<button id="homeGrammarReviewButton" class="home-action grammar-review-action" type="button" ${state.homeGrammar.available === 0 ? "disabled" : ""}><span>Reviews</span><strong>${state.homeGrammar.available}</strong><small>${state.homeGrammar.available === 0 ? "Nothing ready" : `${state.homeGrammar.dueNow} returning · ${state.homeGrammar.newCount} first reviews`}</small></button><button id="homeGrammarNewButton" class="home-action grammar-new-action" type="button" ${state.homeGrammar.newAvailable === 0 || Number(state.homeGrammar.newLimit) === 0 || state.submitting ? "disabled" : ""}><span>${grammarDailyComplete(state.homeGrammar) ? "Learn more grammar" : "Learn new grammar"}</span><strong>${grammarTodayCount(state.homeGrammar)} / ${state.homeGrammar.newLimit}</strong><small>${state.homeGrammar.newAvailable === 0 ? "All grammar added" : Number(state.homeGrammar.newLimit) === 0 ? "Paused in Study lists" : grammarDailyComplete(state.homeGrammar) ? "Add another batch" : `${grammarRemainingToday(state.homeGrammar)} left today`}</small></button>` : '<div class="home-action home-action-loading"><span>Reviews</span></div><div class="home-action home-action-loading"><span>Lessons</span></div>'}
       </div></div>
     </section>
     ${detailedStatsMarkup(state)}
@@ -575,21 +556,6 @@ const studyListGridMarkup = (state) => `<div class="study-list-grid">
   )).join("")}
 </div>`;
 
-const grammarStudyListsMarkup = (summary) => summary ? `
-  <section class="study-list-group">
-    <div class="study-list-group-heading"><h2>Grammar</h2><span>New grammar per day by level</span></div>
-    <div class="study-list-grid grammar-study-list-grid">${(summary.levels ?? []).map((level) => ((added, total) => `<section class="study-list-row">
-      <div class="study-list-heading">
-        <button class="study-list-name-link" type="button" data-grammar-list-level="${escapeHtml(level.level)}">Grammar · ${escapeHtml(level.level)}</button>
-        <div class="study-list-actions"><label><span>New / day</span><input name="dailyNew:grammar-${escapeHtml(level.level.toLowerCase())}" type="number" min="0" max="100" step="1" value="${Number(level.dailyNew ?? 0)}" aria-label="New grammar per day for ${escapeHtml(level.level)}" /></label></div>
-      </div>
-      <div class="study-list-progress" aria-label="${added} added, ${Math.max(0, total - added)} not added, out of ${total}">
-        <div class="study-list-track">${added === 0 ? "" : `<span class="study-list-segment grammar-added" style="width:${added / Math.max(1, total) * 100}%"></span>`}</div>
-        <div class="study-list-counts"><span><strong>${added.toLocaleString()}</strong> added</span><span>${Math.max(0, total - added).toLocaleString()} not added</span></div>
-      </div>
-    </section>`)(Number(level.inPool ?? 0), Number(level.total ?? 0))).join("")}</div>
-  </section>` : "";
-
 const studyListsMarkup = (state) => state.studyListDetail
   ? studyListDetailMarkup(state)
   : `${managementHeaderMarkup(state, "Study lists")}
@@ -597,168 +563,11 @@ const studyListsMarkup = (state) => state.studyListDetail
       ${state.notice ? `<div class="notice-band" role="status">${escapeHtml(state.notice)}</div>` : ""}
       <form id="studyListsForm" class="study-lists-form">
         <section class="study-list-group"><div class="study-list-group-heading"><h2>Vocab &amp; Kanji</h2><span>New cards per day by list</span></div>${studyListGridMarkup(state)}</section>
-        ${grammarStudyListsMarkup(state.homeGrammar)}
         ${state.error ? `<div class="form-error" role="alert">${escapeHtml(state.error)}</div>` : ""}
         <div class="form-submit"><button class="primary-button" type="submit">Save daily plan</button></div>
       </form>
       <section class="add-list-section"><h2>Add your own list</h2><form id="customStudyListForm" class="custom-study-list-form"><label>List name<input name="name" placeholder="Travel words" required /></label>${listImportFieldsMarkup("Create list")}</form></section>
     </main>`;
-
-const grammarSectionHeading = (title, backId = null) => `
-  <div class="grammar-section-heading">
-    ${backId ? `<button id="${backId}" class="icon-button" type="button" title="Back" aria-label="Back"><span aria-hidden="true">←</span></button>` : ""}
-    <div><span>Grammar</span><h2${title.jp ? ' lang="ja"' : ""}>${escapeHtml(title.text)}</h2></div>
-  </div>`;
-
-const grammarMenuMarkup = (state) => ((summary) => `
-  ${managementHeaderMarkup(state, "Grammar")}
-  <main class="management-main grammar-main">
-    ${state.error ? `<div class="error-band" role="alert">${escapeHtml(state.error)}</div>` : ""}
-    ${summary
-      ? `<section class="grammar-menu-actions">
-          <button id="grammarReviewButton" class="grammar-menu-action" type="button" ${summary.available === 0 ? "disabled" : ""}>
-            <span>Grammar reviews</span><strong>${summary.available}</strong><small>${summary.available === 0 ? "Nothing ready" : `${summary.dueNow} returning · ${summary.newCount} first reviews`}</small>
-          </button>
-          <button id="grammarNewLessonButton" class="grammar-menu-action grammar-new-action" type="button" ${summary.newAvailable === 0 || Number(summary.newLimit) === 0 || state.submitting ? "disabled" : ""}>
-            <span>${grammarDailyComplete(summary) ? "Learn more grammar" : "Learn new grammar"}</span><strong>${grammarTodayCount(summary)} / ${summary.newLimit}</strong><small>${summary.newAvailable === 0 ? "All grammar added" : Number(summary.newLimit) === 0 ? "Paused in Study lists" : grammarDailyComplete(summary) ? "Add another batch" : `${grammarRemainingToday(summary)} left today`}</small>
-          </button>
-          <button id="grammarLessonsButton" class="grammar-menu-action grammar-library-action" type="button">
-            <span>Browse grammar</span><strong>${summary.pool} learning</strong><small>${grammarTotal(summary)} grammar points total</small>
-          </button>
-        </section>
-        <section class="grammar-levels" aria-label="Grammar progress by JLPT level">
-          ${summary.levels.map((level) => `<div class="grammar-level-row">
-            <span class="grammar-level-name">${escapeHtml(level.level)}</span>
-            <div class="grammar-level-bar"><div class="grammar-level-fill" style="width:${level.total ? level.inPool / level.total * 100 : 0}%"></div></div>
-            <span class="grammar-level-count">${level.inPool} / ${level.total}</span>
-          </div>`).join("")}
-        </section>`
-      : '<div class="grammar-loading" role="status">Loading grammar</div>'}
-  </main>`)(state.grammar?.summary);
-
-const clozeBlankMarkup = (feedback) => feedback
-  ? `<span class="cloze-blank filled ${feedback.correct ? "correct" : "wrong"}" lang="ja">${escapeHtml(feedback.reading)}</span>`
-  : '<span class="cloze-blank" aria-hidden="true"></span>';
-
-const grammarReviewMarkup = (state) => ((review) => `
-  ${managementHeaderMarkup(state, "Grammar review")}
-  <main class="management-main grammar-main">
-    ${grammarSectionHeading({ text: "Grammar review" }, "grammarBackMenuButton")}
-    ${state.error ? `<div class="error-band" role="alert">${escapeHtml(state.error)}</div>` : ""}
-    ${review.done
-      ? `<section class="complete-stage grammar-complete">
-          <div class="completion-mark" aria-hidden="true">✓</div>
-          <h1>Review complete</h1>
-          <p>Scheduling updated.</p>
-          <div class="completion-actions">${review.remaining > 0 ? `<button id="grammarMoreButton" class="primary-button" type="button">Continue ${review.remaining} more</button>` : ""}<button id="grammarMenuButton" class="quiet-button" type="button">Back to grammar</button></div>
-        </section>`
-      : ((question) => ((feedback) => `<section class="grammar-review">
-          <div class="grammar-review-top"><span class="grammar-badge">${escapeHtml(question.level)}</span><span class="queue-count">${review.queue.length - review.index} left</span></div>
-          <div class="grammar-cloze-hint">Complete the sentence · <strong>${escapeHtml(question.meaning)}</strong></div>
-          <div class="grammar-cloze-sentence" lang="ja">${renderFurigana(question.before)}${clozeBlankMarkup(feedback)}${renderFurigana(question.after)}</div>
-          ${feedback
-            ? `<div class="grammar-feedback ${feedback.correct ? "correct" : "wrong"}">
-                <span class="grammar-feedback-mark" aria-hidden="true">${feedback.correct ? "✓" : "×"}</span>
-                <div class="grammar-feedback-copy">
-                  <strong lang="ja">${escapeHtml(feedback.surface)}${feedback.reading && feedback.reading !== feedback.surface ? ` <span class="cloze-reading">${escapeHtml(feedback.reading)}</span>` : ""}</strong>
-                  ${!feedback.correct && feedback.submitted ? `<span class="cloze-yours">You wrote: ${escapeHtml(feedback.submitted)}</span>` : ""}
-                  ${feedback.english ? `<span>${escapeHtml(feedback.english)}</span>` : ""}
-                </div>
-              </div>
-              <div class="feedback-actions"><button id="grammarContinueButton" class="primary-button" type="button" data-enter-next autofocus>Continue</button></div>`
-            : `<form id="grammarClozeForm" class="grammar-cloze-form">
-                <label for="grammarClozeInput">Missing grammar</label>
-                <div class="answer-control"><input id="grammarClozeInput" name="answer" lang="ja" autocomplete="off" autocapitalize="none" spellcheck="false" required /><button class="primary-button" type="submit" ${state.submitting ? "disabled" : ""}>Check</button></div>
-                ${question.hint ? `<p class="grammar-hint">${escapeHtml(question.hint)}</p>` : ""}
-              </form>`}
-        </section>`)(review.feedback))(review.queue[review.index])}
-  </main>`)(state.grammar.review);
-
-const grammarLevelTabs = (active) => ["all", "N5", "N4", "N3", "N2", "N1"]
-  .map((level) => `<button class="grammar-tab ${active === level ? "active" : ""}" type="button" data-grammar-level="${level}">${level === "all" ? "All" : level}</button>`)
-  .join("");
-
-const grammarFilterTabs = (active) => [["all", "All"], ["pool", "Added"], ["studied", "Studied"]]
-  .map(([filter, label]) => `<button class="grammar-tab ${active === filter ? "active" : ""}" type="button" data-grammar-filter="${filter}">${label}</button>`)
-  .join("");
-
-const grammarChip = (point) => point.inPool
-  ? point.reviewable
-    ? '<span class="grammar-chip pool">Added</span>'
-    : '<span class="grammar-chip">Lesson only</span>'
-  : !point.reviewable
-    ? '<span class="grammar-chip">Lesson only</span>'
-  : point.studied
-    ? '<span class="grammar-chip studied">Studied</span>'
-    : "";
-
-const grammarLessonsMarkup = (state) => ((lessons) => `
-  ${managementHeaderMarkup(state, "Grammar lessons")}
-  <main class="management-main grammar-main">
-    ${grammarSectionHeading({ text: "Grammar library" }, "grammarBackMenuButton")}
-    ${state.error ? `<div class="error-band" role="alert">${escapeHtml(state.error)}</div>` : ""}
-    <div class="grammar-lesson-toolbar">
-      <div class="grammar-tab-row" role="group" aria-label="JLPT level">${grammarLevelTabs(lessons.level)}</div>
-      <div class="grammar-tab-row" role="group" aria-label="Lesson filter">${grammarFilterTabs(lessons.filter)}</div>
-    </div>
-    <div class="grammar-lesson-list">
-      ${lessons.points.length === 0
-        ? '<p class="grammar-empty">No grammar points here.</p>'
-        : lessons.points.map((point) => `<button class="grammar-lesson-row" type="button" data-grammar-lesson="${escapeHtml(point.id)}">
-            <span class="grammar-lesson-jp" lang="ja">${escapeHtml(point.japanese)}</span>
-            <span class="grammar-lesson-en">${escapeHtml(point.english)}</span>
-            <span class="grammar-lesson-tags"><span class="grammar-badge small">${escapeHtml(point.level)}</span>${grammarChip(point)}</span>
-          </button>`).join("")}
-    </div>
-  </main>`)(state.grammar.lessons);
-
-const grammarLessonDetailMarkup = (state) => ((detail) => `
-  ${managementHeaderMarkup(state, "Grammar lesson")}
-  <main class="management-main grammar-main grammar-lesson-detail">
-    ${grammarSectionHeading({ text: detail.loading ? "Loading lesson" : detail.japanese, jp: !detail.loading }, "grammarBackLessonsButton")}
-    ${state.error ? `<div class="error-band" role="alert">${escapeHtml(state.error)}</div>` : ""}
-    ${detail.loading
-      ? '<div class="grammar-loading" role="status">Loading lesson</div>'
-      : `<div class="grammar-lesson-meta">
-          <span class="grammar-badge">${escapeHtml(detail.level)}</span>
-          <span class="grammar-lesson-en-big">${escapeHtml(detail.english)}</span>
-          ${!detail.reviewable
-            ? '<span class="grammar-chip">Lesson only</span>'
-            : detail.inPool
-              ? '<span class="grammar-chip pool">Added</span>'
-              : `<button id="grammarAddButton" class="quiet-button" type="button" ${state.submitting ? "disabled" : ""}>Add to reviews</button>`}
-        </div>
-        ${detail.englishHint ? `<p class="grammar-hint">${escapeHtml(detail.englishHint)}</p>` : ""}
-        <article class="grammar-content">${detail.hasLesson ? renderGrammarBlocks(detail.content) : '<p class="grammar-empty">No lesson written yet for this point.</p>'}</article>`}
-  </main>`)(state.grammar.lessonDetail);
-
-const grammarNewLessonMarkup = (state) => ((newLesson) => `
-  ${managementHeaderMarkup(state, "New grammar")}
-  <main class="management-main grammar-main grammar-lesson-detail">
-    ${newLesson.index >= newLesson.cards.length
-      ? `<section class="complete-stage grammar-complete">
-          <div class="completion-mark" aria-hidden="true">✓</div>
-          <h1>${newLesson.cards.length} ${newLesson.more ? "more " : ""}grammar points learned</h1>
-          <p>These grammar points were added to your reviews as you completed them.</p>
-          <button id="grammarMenuButton" class="quiet-button" type="button">Back to grammar</button>
-        </section>`
-      : ((card) => `${grammarSectionHeading({ text: card.japanese, jp: true }, "grammarBackMenuButton")}
-          <div class="grammar-newlesson-position">${newLesson.index + 1} of ${newLesson.cards.length} · new grammar</div>
-          <div class="grammar-lesson-meta"><span class="grammar-badge">${escapeHtml(card.level)}</span><span class="grammar-lesson-en-big">${escapeHtml(card.english)}</span></div>
-          ${card.englishHint ? `<p class="grammar-hint">${escapeHtml(card.englishHint)}</p>` : ""}
-          <article class="grammar-content">${card.content.length ? renderGrammarBlocks(card.content) : '<p class="grammar-empty">No lesson written yet for this point.</p>'}</article>
-          <div class="feedback-actions"><button id="grammarNewLessonNextButton" class="primary-button" type="button" data-enter-next ${state.submitting ? "disabled" : ""} autofocus>${newLesson.index + 1 === newLesson.cards.length ? "Done" : "Next"}</button></div>`)(newLesson.cards[newLesson.index])}
-  </main>`)(state.grammar.newLesson);
-
-const grammarMarkup = (state) => state.grammar?.view === "review"
-  ? grammarReviewMarkup(state)
-  : state.grammar?.view === "lessons"
-    ? grammarLessonsMarkup(state)
-    : state.grammar?.view === "lesson"
-      ? grammarLessonDetailMarkup(state)
-      : state.grammar?.view === "newlesson"
-        ? grammarNewLessonMarkup(state)
-        : grammarMenuMarkup(state);
 
 const settingsMarkup = (state) => `
   ${managementHeaderMarkup(state, "Settings")}
@@ -767,6 +576,7 @@ const settingsMarkup = (state) => `
     <div class="management-layout">
       <section class="settings-pane"><div class="pane-heading"><h2>Daily setup</h2></div>${settingsFieldsMarkup(state, { formId: "settingsForm", submitLabel: "Save settings" })}</section>
       <aside class="data-pane">
+        ${syncEnabled ? syncPanelMarkup : ""}
         <section><div class="pane-heading"><span>Backup</span><h2>Learner data</h2></div><button id="backupButton" class="quiet-button full-button" type="button">Download backup</button>${restoreFormMarkup}</section>
         <section><div class="pane-heading"><h2>Add your own list</h2></div>${customListImportMarkup("settingsImportForm")}</section>
       </aside>
@@ -789,11 +599,10 @@ const sourcesMarkup = (state) => `
   <main class="sources-main">
     <header><span>About</span><h2>Built for direct, local study.</h2><p>Leo Sensei の-nonsense 日本語 keeps progress on this computer as an append-only learning history.</p></header>
     <section><span>Vocabulary decks</span><h3>Unofficial JLPT approximations</h3><p>N5-N1 vocabulary is derived from <strong>open-anki-jlpt-decks</strong>, pinned at commit <code>1ad66734417aca9dbcca6b2d5ee440cb13ab3ba0</code>. MIT License, Copyright (c) 2020 Jamie Sinclair.</p><p>The JLPT does not publish official vocabulary lists. Each list has its own New / day setting.</p></section>
-    <section><span>Grammar material</span><h3>Lessons and examples</h3><p>The bundled JLPT N1 grammar extract is derived from <strong>Hanabira.org</strong> under CC BY-SA. Personal MaruMori exports are runtime learner inputs and are not distributed with this application.</p></section>
     <section><span>Dictionary material</span><h3>EDRDG acknowledgement</h3><p>This product may use material from the JMdict and KANJIDIC2 dictionary files. Copyright is held by the Electronic Dictionary Research and Development Group and contributors. Dictionary material is used under CC BY-SA 4.0.</p></section>
     <section><span>Kanji reference</span><h3>Components, look-alikes and sound families</h3><p>Component diagrams use KanjiVG, © Ulrich Apel, under CC BY-SA 3.0. Radical and phonetic information comes from Kanjium; look-alike links also use similar-kanji by siikamiika (MIT). The phonetics and other additions to EDICT, KANJIDIC and KRADFILE were provided by Uros O. through his free database, under CC BY-SA 4.0.</p></section>
     <section><span>Vocabulary reference</span><h3>Dictionary senses and examples</h3><p>English dictionary senses and usage labels use EDRDG JMdict via jmdict-simplified (CC BY-SA 4.0). Linked examples come from the Tanaka Corpus / Tatoeba contributors (CC BY 2.0 FR); each example links to its source.</p></section>
-    <section><span>Runtime</span><h3>Open components</h3><p>Review progress uses a nine-stage schedule. Japanese input uses WanaKana, and grammar builds use Kuromoji. Pronunciation is unavailable by default and appears only when an optional external loopback service is configured.</p></section>
+    <section><span>Runtime</span><h3>Open components</h3><p>Review progress uses a nine-stage schedule. Japanese input uses WanaKana. Pronunciation is unavailable by default and appears only when an optional external loopback service is configured.</p></section>
   </main>`;
 
 const voiceMarkup = (state) => `${managementHeaderMarkup(state, "Voice")}${voiceCustomizationContentMarkup}`;
@@ -819,8 +628,6 @@ const pageMarkup = (state, reference = null, comparisonOpen = []) => {
       ? homeMarkup(state)
       : state.view === "lists"
         ? studyListsMarkup(state)
-        : state.view === "grammar"
-          ? grammarMarkup(state)
     : state.view === "settings"
       ? settingsMarkup(state)
       : state.view === "voice"
@@ -882,8 +689,6 @@ const stateWithDaily = (state, daily, settings = state.settings) => ({
   studyListSort: state.studyListSort,
   kanjiDetail: state.kanjiDetail,
   referenceHistory: state.referenceHistory,
-  grammar: state.grammar,
-  homeGrammar: state.homeGrammar,
   notice: state.notice,
   view: state.view,
 });
@@ -902,27 +707,17 @@ const persistSettings = ({ state, form, nextView }) => ((settingsResult) => sett
     ))
   : render({ ...state, submitting: false, error: settingsResult.error.join(" ") }))(settingsFromForm(form));
 
-const openGrammar = (state) => ((opened) => (
-  render(opened),
-  fetchJson("/api/grammar", undefined, (result) => result.ok
-    ? render(reduceUi(opened, { type: "grammar_summary_loaded", summary: result.value }))
-    : render(reduceUi(opened, { type: "request_failed", error: result.error })))
-))(reduceUi({ ...state, view: "grammar", notice: null }, { type: "grammar_opened" }));
-
-const openView = (state, view) => view === "grammar"
-  ? openGrammar(state)
-  : view === "review"
+const openView = (state, view) => view === "review"
     ? fetchValue("/api/daily").then((daily) => daily.ok
       ? render({ ...stateWithDaily(state, daily.value), view: "review", error: null, notice: null })
       : render({ ...state, error: daily.error }))
   : ["settings", "lists"].includes(view)
-    ? Promise.all([fetchValue("/api/daily"), fetchValue("/api/study-lists"), fetchValue("/api/grammar")])
-      .then(([daily, lists, grammar]) => daily.ok && lists.ok
+    ? Promise.all([fetchValue("/api/daily"), fetchValue("/api/study-lists")])
+      .then(([daily, lists]) => daily.ok && lists.ok
         ? render({
             ...stateWithDaily(state, daily.value),
             view,
             studyLists: lists.value.lists,
-            homeGrammar: grammar.ok ? grammar.value : state.homeGrammar,
             studyListDetail: view === "lists" ? null : state.studyListDetail,
             studyListSort: view === "lists" ? "default" : state.studyListSort,
             error: null,
@@ -930,8 +725,8 @@ const openView = (state, view) => view === "grammar"
           })
         : render({ ...state, error: [daily, lists].find((result) => !result.ok)?.error }))
   : view === "home"
-    ? ((statsRequest) => Promise.all([fetchValue("/api/daily"), fetchValue("/api/study-lists"), fetchValue("/api/grammar")])
-      .then(([daily, lists, grammar]) => daily.ok && lists.ok
+    ? ((statsRequest) => Promise.all([fetchValue("/api/daily"), fetchValue("/api/study-lists")])
+      .then(([daily, lists]) => daily.ok && lists.ok
         ? ((homeState) => (
             render(homeState),
             ((homeNode) => statsRequest.then((stats) => stats.ok && root.querySelector(".home-main") === homeNode
@@ -941,7 +736,6 @@ const openView = (state, view) => view === "grammar"
             ...stateWithDaily(state, daily.value),
             view,
             studyLists: lists.value.lists,
-            homeGrammar: grammar.ok ? grammar.value : state.homeGrammar,
             error: null,
             notice: null,
           })
@@ -1024,6 +818,11 @@ const render = (state) => {
   const comparisonOpen = root.querySelector("#feedbackReference")?.dataset.referenceCardId === displayedCardId
     ? [...root.querySelectorAll("#feedbackReference [data-comparison][open]")].map((node) => node.dataset.comparison) : [];
   root.innerHTML = state.daily && state.settings ? pageMarkup(state, feedbackReferences.get(displayedCardId), comparisonOpen) : '<div class="loading">Loading today’s session</div>';
+  const wasAllowed = allowSyncApply;
+  syncView = state.view;
+  allowSyncApply = Boolean(state.settings && ["home", "settings", "onboarding"].includes(syncView) && !state.submitting);
+  studySync?.attach(root.querySelector("[data-sync-panel]"));
+  if (allowSyncApply && !wasAllowed) studySync?.schedule(0);
   const transition = (event) => render(reduceUi(state, event));
   const reloadStudyList = (lists, listId) => fetchJson(
     `/api/study-lists/${encodeURIComponent(listId)}/items`,
@@ -1179,117 +978,6 @@ const render = (state) => {
   root.querySelector("#lessonMarkKnownButton")?.addEventListener("click", () => markKnown(
     state.daily.lessonCards?.[state.lessonPreviewIndex]?.id,
   ));
-  const grammarBase = () => state.grammar
-    ? { ...state, view: "grammar", error: null }
-    : reduceUi({ ...state, view: "grammar", error: null }, { type: "grammar_opened" });
-  const loadGrammarReview = () => fetchJson("/api/grammar/review", undefined, (result) => result.ok
-    ? render(reduceUi(grammarBase(), {
-        type: "grammar_review_loaded",
-        queue: result.value.queue,
-        remaining: result.value.remaining,
-      }))
-    : transition({ type: "request_failed", error: result.error }));
-  const startGrammarNewLesson = () => ((summary, more) => (
-    render(reduceUi(state, { type: "request_started" })),
-    postJson("/api/grammar/lesson", { more }, (result) => result.ok
-      ? result.value.cards.length > 0
-        ? render(reduceUi(grammarBase(), {
-            type: "grammar_newlesson_started",
-            cards: result.value.cards,
-            more: result.value.more,
-          }))
-        : transition({ type: "request_failed", error: "No new grammar available." })
-      : transition({ type: "request_failed", error: result.error }))
-  ))(state.grammar?.summary ?? state.homeGrammar, grammarDailyComplete(state.grammar?.summary ?? state.homeGrammar));
-  const loadGrammarLessons = (level, filter) => fetchJson(
-    `/api/grammar/lessons?level=${encodeURIComponent(level)}&filter=${encodeURIComponent(filter)}`,
-    undefined,
-    (result) => result.ok
-      ? render(reduceUi(grammarBase(), {
-          type: "grammar_lessons_loaded",
-          level: result.value.level,
-          filter: result.value.filter,
-          points: result.value.points,
-        }))
-      : transition({ type: "request_failed", error: result.error }),
-  );
-  [...root.querySelectorAll("[data-grammar-list-level]")].map((button) => button.addEventListener(
-    "click",
-    () => loadGrammarLessons(button.dataset.grammarListLevel, "all"),
-  ));
-  root.querySelector("#homeGrammarReviewButton")?.addEventListener("click", loadGrammarReview);
-  root.querySelector("#homeGrammarNewButton")?.addEventListener("click", startGrammarNewLesson);
-  root.querySelector("#grammarReviewButton")?.addEventListener("click", loadGrammarReview);
-  root.querySelector("#grammarMoreButton")?.addEventListener("click", loadGrammarReview);
-  root.querySelector("#grammarNewLessonButton")?.addEventListener("click", startGrammarNewLesson);
-  root.querySelector("#grammarLessonsButton")?.addEventListener("click", () => loadGrammarLessons("all", "all"));
-  root.querySelector("#grammarMenuButton")?.addEventListener("click", () => openGrammar(state));
-  root.querySelector("#grammarBackMenuButton")?.addEventListener("click", () => transition({ type: "grammar_menu" }));
-  root.querySelector("#grammarBackLessonsButton")?.addEventListener("click", () => state.grammar.lessons
-    ? transition({
-        type: "grammar_lessons_loaded",
-        level: state.grammar.lessons.level,
-        filter: state.grammar.lessons.filter,
-        points: state.grammar.lessons.points,
-      })
-    : transition({ type: "grammar_menu" }));
-  root.querySelector("#grammarNewLessonNextButton")?.addEventListener("click", () => ((card, requested) => (
-    render(requested),
-    postJson(
-      "/api/grammar/add",
-      { id: card.id, more: Boolean(state.grammar.newLesson.more) },
-      (result) => result.ok
-        ? render(reduceUi(
-            reduceUi(requested, { type: "grammar_lesson_added", added: result.value.added }),
-            { type: "grammar_newlesson_next" },
-          ))
-        : transition({ type: "request_failed", error: result.error }),
-    )
-  ))(
-    state.grammar.newLesson.cards[state.grammar.newLesson.index],
-    reduceUi(state, { type: "request_started" }),
-  ));
-  root.querySelector("#grammarClozeForm")?.addEventListener("submit", (submitEvent) => (
-    submitEvent.preventDefault(),
-    ((answer, question) => (
-      render(reduceUi(state, { type: "request_started" })),
-      postJson(
-        "/api/grammar/answer",
-        { cardId: question.cardId, clozeIndex: question.clozeIndex, answer },
-        (result) => result.ok
-          ? render(reduceUi(state, { type: "grammar_answered", feedback: { ...result.value, submitted: answer } }))
-          : transition({ type: "request_failed", error: result.error }),
-      )
-    ))(
-      new FormData(submitEvent.currentTarget).get("answer")?.toString().trim() ?? "",
-      state.grammar.review.queue[state.grammar.review.index],
-    )
-  ));
-  root.querySelector("#grammarContinueButton")?.addEventListener("click", () => transition({ type: "grammar_next" }));
-  [...root.querySelectorAll("[data-grammar-level]")].map((button) => button.addEventListener(
-    "click",
-    () => loadGrammarLessons(button.dataset.grammarLevel, state.grammar.lessons.filter),
-  ));
-  [...root.querySelectorAll("[data-grammar-filter]")].map((button) => button.addEventListener(
-    "click",
-    () => loadGrammarLessons(state.grammar.lessons.level, button.dataset.grammarFilter),
-  ));
-  [...root.querySelectorAll("[data-grammar-lesson]")].map((button) => button.addEventListener("click", () => ((opened) => (
-    render(opened),
-    fetchJson(`/api/grammar/lesson?id=${encodeURIComponent(button.dataset.grammarLesson)}`, undefined, (result) => result.ok
-      ? render(reduceUi(opened, { type: "grammar_lesson_loaded", detail: result.value }))
-      : render(reduceUi(opened, { type: "request_failed", error: result.error })))
-  ))(reduceUi(state, { type: "grammar_lesson_opened", id: button.dataset.grammarLesson }))));
-  root.querySelector("#grammarAddButton")?.addEventListener("click", () => (
-    render(reduceUi(state, { type: "request_started" })),
-    postJson(
-      "/api/grammar/add",
-      { id: state.grammar.lessonDetail.id, more: grammarDailyComplete(state.grammar.summary) },
-      (result) => result.ok
-        ? transition({ type: "grammar_lesson_added", added: result.value.added })
-        : transition({ type: "request_failed", error: result.error }),
-    )
-  ));
   root.querySelector("#backupButton")?.addEventListener("click", () => downloadBackup(state));
   root.querySelector("#copyVoicePrompt")?.addEventListener("click", (clickEvent) => copyVoiceCustomizationPrompt({
     clipboard: globalThis.navigator?.clipboard,
@@ -1427,8 +1115,6 @@ const render = (state) => {
   const answerInput = root.querySelector("#answerInput");
   ["reading", "reverse"].includes(state.phase) && answerInput ? bind(answerInput, { IMEMode: "toHiragana" }) : null;
   answerInput?.focus();
-  const grammarClozeInput = root.querySelector("#grammarClozeInput");
-  grammarClozeInput ? (bind(grammarClozeInput, { IMEMode: "toHiragana" }), grammarClozeInput.focus()) : null;
   [...root.querySelectorAll('[data-alias-kind="reading"] input')].map((input) =>
     bind(input, { IMEMode: "toHiragana" }));
   continueButton?.focus({ preventScroll: true });
@@ -1439,7 +1125,7 @@ const render = (state) => {
   state.daily?.speechAvailable && lessonPreviewCard && !heardLessonCardIds.has(lessonPreviewCard.id)
     ? (heardLessonCardIds.add(lessonPreviewCard.id), speakCard(lessonPreviewCard))
     : null;
-  const nextAction = root.querySelector("#lessonNextButton, #continueButton, #returnToReviewButton, #grammarNewLessonNextButton, #grammarContinueButton, #extraButton");
+  const nextAction = root.querySelector("#lessonNextButton, #continueButton, #returnToReviewButton, #extraButton");
   root.onkeydown = (keyEvent) => keyEvent.key === "Enter"
     && !keyEvent.isComposing
     && !keyEvent.defaultPrevented
@@ -1463,11 +1149,10 @@ const render = (state) => {
 const hydrateBootstrap = (initialState, expectedNode) => Promise.all([
   fetchValue("/api/decks"),
   fetchValue("/api/study-lists"),
-  fetchValue("/api/grammar"),
   loadDesktopBrowsers(),
   loadDesktopFocusApplications(),
   loadDesktopGateBehavior(),
-]).then(([decksResult, listsResult, grammarResult, browserCandidates, candidates, gateBehavior]) => ((browserIds) => ((hydratedState) =>
+]).then(([decksResult, listsResult, browserCandidates, candidates, gateBehavior]) => ((browserIds) => ((hydratedState) =>
   root.firstElementChild !== expectedNode
     ? null
     : (render(hydratedState), hydratedState.view === "home"
@@ -1481,7 +1166,6 @@ const hydrateBootstrap = (initialState, expectedNode) => Promise.all([
     browserCandidates,
     applicationCandidates: candidates.filter(({ identity }) => !browserIds.has(identity)),
     gateBehavior,
-    homeGrammar: grammarResult.ok ? grammarResult.value : null,
     error: [decksResult, listsResult].find((result) => !result.ok)?.error ?? null,
   }))(new Set(browserCandidates.map(({ identity }) => identity))));
 
@@ -1525,7 +1209,6 @@ const bootstrap = (notice = null, preferredView = null) => Promise.all([
       applicationCandidates: [],
       gateBehavior: "redirect",
       stats: null,
-      homeGrammar: null,
       notice,
       view: settingsResult.value.onboardingComplete ? preferredView ?? "home" : "onboarding",
     })
